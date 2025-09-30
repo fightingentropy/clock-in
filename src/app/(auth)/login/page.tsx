@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { HOME_ROUTE } from '@/lib/routes';
+import { ADMIN_ROUTE } from '@/lib/routes';
 
 const schema = z.object({
   email: z.string().email(),
@@ -25,6 +25,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const [isSubmitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const callbackUrlParam = searchParams.get('callbackUrl');
   const form = useForm<LoginForm>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -37,10 +38,13 @@ export default function LoginPage() {
     setSubmitting(true);
     setError(null);
 
+    const redirectFallback = callbackUrlParam ?? ADMIN_ROUTE;
+
     const result = await signIn('credentials', {
       redirect: false,
       email: values.email,
       password: values.password,
+      callbackUrl: redirectFallback,
     });
 
     if (result?.error) {
@@ -49,7 +53,21 @@ export default function LoginPage() {
       return;
     }
 
-    router.replace(HOME_ROUTE);
+    const targetUrl = result?.url ?? redirectFallback;
+
+    let destination = ADMIN_ROUTE;
+
+    try {
+      const parsed = new URL(targetUrl, window.location.origin);
+
+      if (parsed.origin === window.location.origin) {
+        destination = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+    } catch {
+      destination = ADMIN_ROUTE;
+    }
+
+    router.replace(destination);
     router.refresh();
     setSubmitting(false);
   });
