@@ -52,7 +52,17 @@ async function handleNavigationRequest(request) {
     });
 
     if (networkResponse?.type === 'opaqueredirect') {
-      return fetch('/login', { redirect: 'follow' });
+      const cachedLogin = await caches.match('/login');
+      if (cachedLogin) {
+        return cachedLogin.clone();
+      }
+
+      const loginResponse = await fetch('/login', { redirect: 'follow' });
+      return new Response(await loginResponse.clone().blob(), {
+        status: loginResponse.status,
+        statusText: loginResponse.statusText,
+        headers: loginResponse.headers,
+      });
     }
 
     if (networkResponse && networkResponse.ok && networkResponse.type === 'basic') {
