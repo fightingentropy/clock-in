@@ -28,7 +28,7 @@ The default seed users are:
 
 ## Environment
 
-Copy `.env.example` to `.env` (already provided for local SQLite). Update `NEXTAUTH_SECRET` before deploying.
+Copy `.env.example` to `.env` (already provided for local SQLite). Update `NEXTAUTH_SECRET` with a strong random value before deploying (e.g. `openssl rand -base64 32`).
 
 ## Useful scripts
 
