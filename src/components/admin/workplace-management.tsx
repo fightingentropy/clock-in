@@ -60,6 +60,7 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
   const [editingWorkplace, setEditingWorkplace] = useState<WorkplaceWithAssignments | null>(null);
   const [isSavingWorkplace, setSavingWorkplace] = useState(false);
   const [isDeletingWorkplace, setDeletingWorkplace] = useState(false);
+  const [isLocating, setLocating] = useState(false);
 
   const workplaceDefaults: WorkplaceForm = {
     name: '',
@@ -78,6 +79,60 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
     resolver: zodResolver(workplaceSchema),
     defaultValues: workplaceDefaults,
   });
+
+  async function populateFromCurrentLocation() {
+    if (isLocating) return;
+
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      toast.error('Geolocation is not supported in this browser.');
+      return;
+    }
+
+    setLocating(true);
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+        });
+      });
+
+      const { latitude, longitude } = position.coords;
+      const latitudeString = latitude.toFixed(6);
+      const longitudeString = longitude.toFixed(6);
+
+      form.setValue('latitude', latitudeString, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+      form.setValue('longitude', longitudeString, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+
+      toast.success('Location captured from this device.');
+    } catch (error) {
+      let message = 'Unable to retrieve current location.';
+
+      if (error && typeof error === 'object' && 'code' in error) {
+        const geoError = error as GeolocationPositionError;
+        if (geoError.code === geoError.PERMISSION_DENIED) {
+          message = 'Location permission denied. Allow access and try again.';
+        } else if (geoError.code === geoError.POSITION_UNAVAILABLE) {
+          message = 'Current location is unavailable. Try again in a moment.';
+        } else if (geoError.code === geoError.TIMEOUT) {
+          message = 'Timed out while fetching location. Try again.';
+        }
+      }
+
+      toast.error(message);
+    } finally {
+      setLocating(false);
+    }
+  }
 
   async function createWorkplace(values: WorkplaceForm) {
     try {
@@ -258,33 +313,47 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
                       </FormItem>
                     )}
                   />
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="latitude"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Latitude</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.00001" placeholder="40.7128" className="bg-neutral-950/80" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="longitude"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Longitude</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.00001" placeholder="-74.0060" className="bg-neutral-950/80" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-neutral-300">Coordinates</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={populateFromCurrentLocation}
+                        disabled={isLocating}
+                      >
+                        {isLocating ? 'Locating...' : 'Use current location'}
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <FormField
+                        control={form.control}
+                        name="latitude"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Latitude</FormLabel>
+                            <FormControl>
+                              <Input type="number" step="0.00001" placeholder="40.7128" className="bg-neutral-950/80" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="longitude"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Longitude</FormLabel>
+                            <FormControl>
+                              <Input type="number" step="0.00001" placeholder="-74.0060" className="bg-neutral-950/80" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </div>
                   <FormField
                     control={form.control}
@@ -477,4 +546,3 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
     </div>
   );
 }
-
