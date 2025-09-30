@@ -5,11 +5,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { differenceInMinutes, format } from 'date-fns';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signOut } from 'next-auth/react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import { AdminNavigation } from '@/components/admin/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -180,9 +180,7 @@ export default function AdminDashboard({ workers, workplaces, recentEntries }: A
             Monitor attendance in real time, manage workplaces, and control worker access.
           </p>
         </div>
-        <Button variant="outline" onClick={() => signOut({ callbackUrl: '/login' })}>
-          Sign out
-        </Button>
+        <AdminNavigation />
       </header>
 
       <section className="grid gap-4 sm:grid-cols-3">
