@@ -2,12 +2,13 @@
 
 import type { Assignment, TimeEntry, User, Workplace } from '@prisma/client';
 import { differenceInMinutes, format } from 'date-fns';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { AdminNavigation } from '@/components/admin/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useNow } from '@/hooks/use-now';
 
 interface AdminDashboardProps {
   workers: (User & {
@@ -23,17 +24,7 @@ export default function AdminDashboard({ workers, workplacesCount, recentEntries
     () => workers.filter((worker) => worker.timeEntries.some((entry) => !entry.clockOutAt)),
     [workers]
   );
-  const [currentTime, setCurrentTime] = useState(() => Date.now());
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 60_000);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, []);
+  const now = useNow();
 
   function formatMinutes(minutes: number | null) {
     if (minutes === null) return '—';
@@ -111,8 +102,14 @@ export default function AdminDashboard({ workers, workplacesCount, recentEntries
                   </TableRow>
                 ) : (
                   recentEntries.map((entry) => {
-                    const clockOutTime = entry.clockOutAt ? new Date(entry.clockOutAt) : new Date(currentTime);
-                    const durationMinutes = differenceInMinutes(clockOutTime, new Date(entry.clockInAt));
+                    const clockOutTime = entry.clockOutAt
+                      ? new Date(entry.clockOutAt)
+                      : now !== null
+                        ? new Date(now)
+                        : null;
+                    const durationMinutes = clockOutTime
+                      ? differenceInMinutes(clockOutTime, new Date(entry.clockInAt))
+                      : null;
 
                     return (
                       <TableRow key={entry.id} className="border-neutral-900">

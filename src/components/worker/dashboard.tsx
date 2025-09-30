@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { distanceInMeters } from '@/lib/geoutils';
+import { useNow } from '@/hooks/use-now';
 
 interface WorkerDashboardProps {
   assignments: (Assignment & { workplace: Workplace })[];
@@ -37,7 +38,7 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
   const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clockedInSince, setClockedInSince] = useState(activeEntry?.clockInAt ?? null);
-  const [tick, setTick] = useState(0);
+  const now = useNow();
 
   const selectedWorkplace = useMemo(
     () => assignments.find((assignment) => assignment.workplaceId === selectedWorkplaceId)?.workplace ?? null,
@@ -94,15 +95,6 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
 
     setClockedInSince(activeEntry.clockInAt);
   }, [activeEntry]);
-
-  useEffect(() => {
-    if (!clockedInSince) {
-      return;
-    }
-
-    const timer = setInterval(() => setTick((value) => value + 1), 60000);
-    return () => clearInterval(timer);
-  }, [clockedInSince, tick]);
 
   const distanceToWorkplace = useMemo(() => {
     if (!selectedWorkplace || !location) {
@@ -163,17 +155,17 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
   }
 
   const activeDurationLabel = useMemo(() => {
-    if (!clockedInSince) {
+    if (!clockedInSince || now === null) {
       return null;
     }
 
     const duration = intervalToDuration({
       start: new Date(clockedInSince),
-      end: new Date(),
+      end: new Date(now),
     });
 
     return formatDuration(duration, { delimiter: ', ' });
-  }, [clockedInSince]);
+  }, [clockedInSince, now]);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
