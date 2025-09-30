@@ -1,4 +1,4 @@
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -63,14 +63,22 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Missing userId query parameter.' }, { status: 400 });
   }
 
-  await prisma.assignment.delete({
-    where: {
-      userId_workplaceId: {
-        userId,
-        workplaceId,
+  try {
+    await prisma.assignment.delete({
+      where: {
+        userId_workplaceId: {
+          userId,
+          workplaceId,
+        },
       },
-    },
-  });
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
+    }
+
+    throw error;
+  }
 
   return NextResponse.json({ success: true });
 }
