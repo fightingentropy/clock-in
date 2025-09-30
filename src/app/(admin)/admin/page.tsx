@@ -6,6 +6,9 @@ import { LOGIN_ROUTE, WORKER_ROUTE } from '@/lib/routes';
 import { getAuthSession } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function AdminPage() {
   const session = await getAuthSession();
 
