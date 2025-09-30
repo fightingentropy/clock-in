@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useNow } from '@/hooks/use-now';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 interface AdminDashboardProps {
   workers: (User & {
@@ -25,6 +26,15 @@ export default function AdminDashboard({ workers, workplacesCount, recentEntries
     [workers]
   );
   const now = useNow();
+  const isHydrated = useHydrated();
+
+  const formatTime = (value: Date | string, pattern: string) => {
+    if (!isHydrated) {
+      return '—';
+    }
+
+    return format(new Date(value), pattern);
+  };
 
   function formatMinutes(minutes: number | null) {
     if (minutes === null) return '—';
@@ -120,9 +130,9 @@ export default function AdminDashboard({ workers, workplacesCount, recentEntries
                           </div>
                         </TableCell>
                         <TableCell>{entry.workplace.name}</TableCell>
-                        <TableCell className="hidden md:table-cell">{format(new Date(entry.clockInAt), 'MMM d, p')}</TableCell>
+                        <TableCell className="hidden md:table-cell">{formatTime(entry.clockInAt, 'MMM d, p')}</TableCell>
                         <TableCell className="hidden md:table-cell">
-                          {entry.clockOutAt ? format(new Date(entry.clockOutAt), 'MMM d, p') : 'Active'}
+                          {entry.clockOutAt ? formatTime(entry.clockOutAt, 'MMM d, p') : 'Active'}
                         </TableCell>
                         <TableCell className="text-right">{formatMinutes(durationMinutes)}</TableCell>
                       </TableRow>
@@ -151,7 +161,7 @@ export default function AdminDashboard({ workers, workplacesCount, recentEntries
                   <CardHeader>
                     <CardTitle className="text-lg">{worker.name}</CardTitle>
                     <CardDescription>
-                      On-site at {entry.workplace.name} since {format(new Date(entry.clockInAt), 'p')}
+                      On-site at {entry.workplace.name} since {formatTime(entry.clockInAt, 'p')}
                     </CardDescription>
                   </CardHeader>
                 </Card>

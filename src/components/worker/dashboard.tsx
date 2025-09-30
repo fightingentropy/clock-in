@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { distanceInMeters } from '@/lib/geoutils';
 import { LOGIN_ROUTE } from '@/lib/routes';
+import { useHydrated } from '@/hooks/use-hydrated';
 import { useNow } from '@/hooks/use-now';
 
 interface WorkerDashboardProps {
@@ -40,6 +41,15 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clockedInSince, setClockedInSince] = useState(activeEntry?.clockInAt ?? null);
   const now = useNow();
+  const isHydrated = useHydrated();
+
+  const formatTime = (value: Date | string, pattern: string) => {
+    if (!isHydrated) {
+      return '—';
+    }
+
+    return format(new Date(value), pattern);
+  };
 
   const selectedWorkplace = useMemo(
     () => assignments.find((assignment) => assignment.workplaceId === selectedWorkplaceId)?.workplace ?? null,
@@ -270,7 +280,7 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
             {activeEntry ? (
               <div className="rounded-md border border-emerald-700 bg-emerald-900/20 p-4 text-sm">
                 <p className="font-medium">
-                  On the clock since {format(new Date(activeEntry.clockInAt), 'p')} at {activeEntry.workplace.name}.
+                  On the clock since {formatTime(activeEntry.clockInAt, 'p')} at {activeEntry.workplace.name}.
                 </p>
                 {activeDurationLabel ? (
                   <p className="text-neutral-300">Elapsed time: {activeDurationLabel}</p>
@@ -315,8 +325,8 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
                   <div>
                     <p className="font-medium">{entry.workplace.name}</p>
                     <p className="text-neutral-400">
-                      {format(new Date(entry.clockInAt), 'MMM d, p')} –{' '}
-                      {entry.clockOutAt ? format(new Date(entry.clockOutAt), 'p') : 'in progress'}
+                      {formatTime(entry.clockInAt, 'MMM d, p')} –{' '}
+                      {entry.clockOutAt ? formatTime(entry.clockOutAt, 'p') : 'in progress'}
                     </p>
                   </div>
                   <Badge variant="secondary">
