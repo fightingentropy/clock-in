@@ -11,26 +11,26 @@ export async function GET() {
     return error;
   }
 
-  const assignments = await prisma.assignment.findMany({
-    where: { userId: session.user.id },
-    include: {
-      workplace: true,
-    },
-    orderBy: { createdAt: 'asc' },
-  });
-
-  const activeEntry = await prisma.timeEntry.findFirst({
-    where: { userId: session.user.id, clockOutAt: null },
-    include: { workplace: true },
-    orderBy: { clockInAt: 'desc' },
-  });
-
-  const recentEntries = await prisma.timeEntry.findMany({
-    where: { userId: session.user.id },
-    include: { workplace: true },
-    orderBy: { clockInAt: 'desc' },
-    take: 10,
-  });
+  const [assignments, activeEntry, recentEntries] = await prisma.$transaction([
+    prisma.assignment.findMany({
+      where: { userId: session.user.id },
+      include: {
+        workplace: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.timeEntry.findFirst({
+      where: { userId: session.user.id, clockOutAt: null },
+      include: { workplace: true },
+      orderBy: { clockInAt: 'desc' },
+    }),
+    prisma.timeEntry.findMany({
+      where: { userId: session.user.id },
+      include: { workplace: true },
+      orderBy: { clockInAt: 'desc' },
+      take: 10,
+    }),
+  ]);
 
   return NextResponse.json({
     assignments,

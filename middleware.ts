@@ -9,5 +9,7 @@ export default withAuth({
 });
 
 export const config = {
-  matcher: ['/((?!api/auth|login|manifest\\.json|favicon\\.ico|service-worker\\.js|_next|.*\\..*).*)'],
+  matcher: [
+    '/((?!api/auth|login|manifest(?:\\.webmanifest|\\.json)?|favicon\\.ico|service-worker\\.js|_next|.*\\..*).*)',
+  ],
 };

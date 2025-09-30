@@ -3,7 +3,7 @@
 import type { Assignment, User, Workplace } from '@prisma/client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -61,6 +61,7 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
   const [isSavingWorkplace, setSavingWorkplace] = useState(false);
   const [isDeletingWorkplace, setDeletingWorkplace] = useState(false);
   const [isLocating, setLocating] = useState(false);
+  const [isRefreshing, startTransition] = useTransition();
 
   const workplaceDefaults: WorkplaceForm = {
     name: '',
@@ -161,7 +162,9 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
       toast.success('Workplace created.');
       setDialogOpen(false);
       form.reset(workplaceDefaults);
-      router.refresh();
+      startTransition(() => {
+        router.refresh();
+      });
     } catch (error) {
       console.error(error);
       toast.error('Unexpected error while creating workplace.');
@@ -182,7 +185,9 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
       }
 
       toast.success('Assignment removed.');
-      router.refresh();
+      startTransition(() => {
+        router.refresh();
+      });
     } catch (error) {
       console.error(error);
       toast.error('Unexpected error while removing assignment.');
@@ -238,7 +243,9 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
 
       toast.success('Workplace updated.');
       closeEditDialog();
-      router.refresh();
+      startTransition(() => {
+        router.refresh();
+      });
     } catch (error) {
       console.error(error);
       toast.error('Unexpected error while updating workplace.');
@@ -267,7 +274,9 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
 
       toast.success('Workplace deleted.');
       closeEditDialog();
-      router.refresh();
+      startTransition(() => {
+        router.refresh();
+      });
     } catch (error) {
       console.error(error);
       toast.error('Unexpected error while deleting workplace.');
@@ -382,7 +391,12 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
                     )}
                   />
                   <DialogFooter>
-                    <Button type="submit">Save workplace</Button>
+                    <Button
+                      type="submit"
+                      disabled={form.formState.isSubmitting || isRefreshing}
+                    >
+                      {form.formState.isSubmitting || isRefreshing ? 'Saving…' : 'Save workplace'}
+                    </Button>
                   </DialogFooter>
                 </form>
               </Form>
@@ -412,6 +426,7 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
                     size="sm"
                     className="border-neutral-700"
                     onClick={() => openEditDialog(workplace)}
+                    disabled={isRefreshing}
                   >
                     Manage
                   </Button>
@@ -531,12 +546,12 @@ export function AdminWorkplaceManagement({ workplaces }: AdminWorkplaceManagemen
                   type="button"
                   variant="destructive"
                   onClick={deleteWorkplace}
-                  disabled={isDeletingWorkplace || isSavingWorkplace}
+                  disabled={isDeletingWorkplace || isSavingWorkplace || isRefreshing}
                 >
                   {isDeletingWorkplace ? 'Deleting…' : 'Delete workplace'}
                 </Button>
-                <Button type="submit" disabled={isSavingWorkplace || isDeletingWorkplace}>
-                  {isSavingWorkplace ? 'Saving…' : 'Save changes'}
+                <Button type="submit" disabled={isSavingWorkplace || isDeletingWorkplace || isRefreshing}>
+                  {isSavingWorkplace || isRefreshing ? 'Saving…' : 'Save changes'}
                 </Button>
               </DialogFooter>
             </form>

@@ -2,7 +2,7 @@
 
 import type { Assignment, TimeEntry, Workplace } from '@prisma/client';
 import { differenceInMinutes, format, formatDuration, intervalToDuration } from 'date-fns';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { toast } from 'sonner';
@@ -31,6 +31,32 @@ type GeoLocation = {
   timestamp: number;
 };
 
+const COORDINATE_EPSILON = 0.00001; // ≈1.1m at the equator
+const ACCURACY_EPSILON = 1; // meters
+const STALE_LOCATION_WINDOW_MS = 5_000;
+
+function shouldUpdateLocation(previous: GeoLocation | null, next: GeoLocation) {
+  if (!previous) {
+    return true;
+  }
+
+  const latDelta = Math.abs(previous.latitude - next.latitude);
+  const lngDelta = Math.abs(previous.longitude - next.longitude);
+  if (latDelta > COORDINATE_EPSILON || lngDelta > COORDINATE_EPSILON) {
+    return true;
+  }
+
+  if (Math.abs(previous.accuracy - next.accuracy) > ACCURACY_EPSILON) {
+    return true;
+  }
+
+  if (next.timestamp - previous.timestamp > STALE_LOCATION_WINDOW_MS) {
+    return true;
+  }
+
+  return false;
+}
+
 export default function WorkerDashboard({ assignments, activeEntry, recentEntries }: WorkerDashboardProps) {
   const router = useRouter();
   const [selectedWorkplaceId, setSelectedWorkplaceId] = useState<string>(
@@ -40,6 +66,7 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
   const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clockedInSince, setClockedInSince] = useState(activeEntry?.clockInAt ?? null);
+  const [isRefreshing, startTransition] = useTransition();
   const now = useNow();
   const isHydrated = useHydrated();
 
@@ -72,12 +99,14 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
 
     watchId = navigator.geolocation.watchPosition(
       (position) => {
-        setLocation({
+        const nextLocation: GeoLocation = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy,
           timestamp: position.timestamp,
-        });
+        };
+
+        setLocation((previous) => (shouldUpdateLocation(previous, nextLocation) ? nextLocation : previous));
         setIsLocating(false);
       },
       (error) => {
@@ -156,7 +185,9 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
       }
 
       toast.success(`Clock ${action === 'IN' ? 'in' : 'out'} successful.`);
-      router.refresh();
+      startTransition(() => {
+        router.refresh();
+      });
     } catch (error) {
       console.error(error);
       toast.error('Unexpected error while updating shift.');
@@ -262,7 +293,7 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
               <Button
                 className="flex-1"
                 variant={activeEntry ? 'outline' : 'default'}
-                disabled={!withinRadius || isSubmitting || Boolean(activeEntry)}
+                disabled={!withinRadius || isSubmitting || isRefreshing || Boolean(activeEntry)}
                 onClick={() => clock('IN')}
               >
                 Clock in
@@ -270,7 +301,7 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
               <Button
                 className="flex-1"
                 variant="destructive"
-                disabled={!withinRadius || isSubmitting || !activeEntry}
+                disabled={!withinRadius || isSubmitting || isRefreshing || !activeEntry}
                 onClick={() => clock('OUT')}
               >
                 Clock out

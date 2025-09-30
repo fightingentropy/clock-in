@@ -2,7 +2,7 @@
 
 import type { Assignment, User, Workplace } from '@prisma/client';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -47,6 +47,7 @@ export function AdminWorkerDirectory({ workers, workplaces }: AdminWorkerDirecto
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [selectedWorker, setSelectedWorker] = useState<WorkerWithAssignments | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshing, startTransition] = useTransition();
 
   const form = useForm<WorkerForm>({
     resolver: zodResolver(workerFormSchema),
@@ -73,31 +74,57 @@ export function AdminWorkerDirectory({ workers, workplaces }: AdminWorkerDirecto
     setDialogOpen(true);
   }
 
+  function openCreateDialog() {
+    setSelectedWorker(null);
+    form.reset({ name: '', email: '', workplaceIds: [] });
+    setDialogOpen(true);
+  }
+
   async function onSubmit(values: WorkerForm) {
-    if (!selectedWorker) return;
+    const workerBeingEdited = selectedWorker;
 
     try {
       setIsSaving(true);
-      const response = await fetch(`/api/admin/workers/${selectedWorker.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(values),
-      });
+      const response = await fetch(
+        workerBeingEdited ? `/api/admin/workers/${workerBeingEdited.id}` : '/api/admin/workers',
+        {
+          method: workerBeingEdited ? 'PATCH' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(values),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        toast.error(data.error ?? 'Failed to update worker.');
+        toast.error(
+          data.error ?? (workerBeingEdited ? 'Failed to update worker.' : 'Failed to create worker.')
+        );
         return;
       }
 
-      toast.success('Worker updated.');
+      if (workerBeingEdited) {
+        toast.success('Worker updated.');
+      } else {
+        const temporaryPassword = data?.temporaryPassword as string | undefined;
+        toast.success('Worker created.', {
+          description: temporaryPassword ? `Temporary password: ${temporaryPassword}` : undefined,
+        });
+      }
+
       closeDialog();
-      router.refresh();
+      startTransition(() => {
+        router.refresh();
+      });
     } catch (error) {
       console.error(error);
-      toast.error('Unexpected error while updating worker.');
+      toast.error(
+        workerBeingEdited
+          ? 'Unexpected error while updating worker.'
+          : 'Unexpected error while creating worker.'
+      );
     } finally {
       setIsSaving(false);
     }
@@ -112,7 +139,10 @@ export function AdminWorkerDirectory({ workers, workplaces }: AdminWorkerDirecto
             Update worker profiles and manage workplace assignments in one place.
           </p>
         </div>
-        <AdminNavigation />
+        <div className="flex items-center gap-2">
+          <Button onClick={openCreateDialog}>Add worker</Button>
+          <AdminNavigation />
+        </div>
       </header>
 
       <Card className="border-neutral-800 bg-neutral-900/60">
@@ -183,8 +213,14 @@ export function AdminWorkerDirectory({ workers, workplaces }: AdminWorkerDirecto
       >
         <DialogContent className="border-neutral-800 bg-neutral-900 text-neutral-100">
           <DialogHeader>
-            <DialogTitle>{selectedWorker ? selectedWorker.name : 'Manage worker'}</DialogTitle>
-            <DialogDescription>Adjust contact details and assign workplaces.</DialogDescription>
+            <DialogTitle>
+              {selectedWorker ? `Manage ${selectedWorker.name}` : 'Add worker'}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedWorker
+                ? 'Adjust contact details and assign workplaces.'
+                : 'Create a worker account and assign workplaces.'}
+            </DialogDescription>
           </DialogHeader>
 
           <Form {...form}>
@@ -254,8 +290,14 @@ export function AdminWorkerDirectory({ workers, workplaces }: AdminWorkerDirecto
               />
 
               <DialogFooter>
-                <Button type="submit" disabled={isSaving}>
-                  {isSaving ? 'Saving...' : 'Save changes'}
+                <Button type="submit" disabled={isSaving || isRefreshing}>
+                  {isSaving || isRefreshing
+                    ? selectedWorker
+                      ? 'Saving...'
+                      : 'Creating...'
+                    : selectedWorker
+                      ? 'Save changes'
+                      : 'Create worker'}
                 </Button>
               </DialogFooter>
             </form>
