@@ -11,6 +11,27 @@ if (process.env.NEXTAUTH_URL) {
 
 const nextConfig: NextConfig = {
   env,
+  webpack(config, { isServer }) {
+    config.module.rules.push({
+      test: /\.md$/i,
+      type: 'asset/source',
+    });
+
+    config.module.rules.push({
+      test: /LICENSE$/i,
+      type: 'asset/source',
+    });
+
+    if (isServer) {
+      const externals = config.externals ?? [];
+
+      config.externals = Array.isArray(externals)
+        ? [...externals, '@libsql/client', '@prisma/adapter-libsql']
+        : [externals, '@libsql/client', '@prisma/adapter-libsql'].filter(Boolean);
+    }
+
+    return config;
+  },
 };
 
 export default nextConfig;
