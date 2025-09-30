@@ -1,0 +1,49 @@
+import { Role } from '@prisma/client';
+import { redirect } from 'next/navigation';
+
+import AdminDashboard from '@/components/admin/dashboard';
+import { LOGIN_ROUTE, WORKER_ROUTE } from '@/lib/routes';
+import { getAuthSession } from '@/lib/session';
+import { prisma } from '@/lib/prisma';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export default async function AdminPage() {
+  const session = await getAuthSession();
+
+  if (!session) {
+    redirect(LOGIN_ROUTE);
+  }
+
+  if (session.user.role !== Role.ADMIN) {
+    redirect(WORKER_ROUTE);
+  }
+
+  const [workers, workplacesCount, recentEntries] = await Promise.all([
+    prisma.user.findMany({
+      where: { role: Role.WORKER },
+      include: {
+        assignments: {
+          include: { workplace: true },
+        },
+        timeEntries: {
+          where: { clockOutAt: null },
+          include: { workplace: true },
+        },
+      },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.workplace.count(),
+    prisma.timeEntry.findMany({
+      include: {
+        user: true,
+        workplace: true,
+      },
+      orderBy: { clockInAt: 'desc' },
+      take: 50,
+    }),
+  ]);
+
+  return <AdminDashboard workers={workers} workplacesCount={workplacesCount} recentEntries={recentEntries} />;
+}

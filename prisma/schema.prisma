@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("TURSO_DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  WORKER
+}
+
+model User {
+  id            String        @id @default(cuid())
+  name          String
+  email         String        @unique
+  passwordHash  String
+  role          Role
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  assignments   Assignment[]
+  timeEntries   TimeEntry[]
+}
+
+model Workplace {
+  id            String        @id @default(cuid())
+  name          String        @unique
+  latitude      Float
+  longitude     Float
+  radiusMeters  Int           @default(50)
+  address       String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  assignments   Assignment[]
+  timeEntries   TimeEntry[]
+}
+
+model Assignment {
+  id           String    @id @default(cuid())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  workplace    Workplace @relation(fields: [workplaceId], references: [id], onDelete: Cascade)
+  workplaceId  String
+  createdAt    DateTime  @default(now())
+
+  @@unique([userId, workplaceId])
+}
+
+model TimeEntry {
+  id             String     @id @default(cuid())
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  workplace      Workplace  @relation(fields: [workplaceId], references: [id], onDelete: Cascade)
+  workplaceId    String
+  clockInAt      DateTime   @default(now())
+  clockOutAt     DateTime?
+  clockInLat     Float?
+  clockInLng     Float?
+  clockOutLat    Float?
+  clockOutLng    Float?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
