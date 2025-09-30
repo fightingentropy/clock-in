@@ -44,7 +44,14 @@ self.addEventListener('fetch', (event) => {
 
 async function handleNavigationRequest(request) {
   try {
-    const networkResponse = await fetch(request.url, { redirect: 'follow' });
+    const followRequest =
+      request.redirect === 'follow' ? request : new Request(request, { redirect: 'follow' });
+
+    const networkResponse = await fetch(followRequest);
+
+    if (networkResponse?.type === 'opaqueredirect') {
+      return fetch('/login', { redirect: 'follow' });
+    }
 
     if (networkResponse && networkResponse.ok && networkResponse.type === 'basic') {
       const cache = await caches.open(CACHE_NAME);
