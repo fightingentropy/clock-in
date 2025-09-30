@@ -37,7 +37,7 @@ interface AdminWorkerDirectoryProps {
 const workerFormSchema = z.object({
   name: z.string().min(2, 'Name is required.'),
   email: z.string().email('Enter a valid email.'),
-  workplaceIds: z.array(z.string()).default([]),
+  workplaceIds: z.array(z.string()),
 });
 
 type WorkerForm = z.infer<typeof workerFormSchema>;
