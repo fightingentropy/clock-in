@@ -2,7 +2,7 @@
 
 import type { Assignment, TimeEntry, User, Workplace } from '@prisma/client';
 import { differenceInMinutes, format } from 'date-fns';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { AdminNavigation } from '@/components/admin/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +23,34 @@ export default function AdminDashboard({ workers, workplacesCount, recentEntries
     () => workers.filter((worker) => worker.timeEntries.some((entry) => !entry.clockOutAt)),
     [workers]
   );
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  function formatMinutes(minutes: number | null) {
+    if (minutes === null) return '—';
+
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+
+    if (hours === 0) {
+      return `${remainingMinutes} min`;
+    }
+
+    if (remainingMinutes === 0) {
+      return `${hours} hr${hours > 1 ? 's' : ''}`;
+    }
+
+    return `${hours} hr${hours > 1 ? 's' : ''} ${remainingMinutes} min`;
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
@@ -83,9 +111,8 @@ export default function AdminDashboard({ workers, workplacesCount, recentEntries
                   </TableRow>
                 ) : (
                   recentEntries.map((entry) => {
-                    const durationMinutes = entry.clockOutAt
-                      ? differenceInMinutes(new Date(entry.clockOutAt), new Date(entry.clockInAt))
-                      : null;
+                    const clockOutTime = entry.clockOutAt ? new Date(entry.clockOutAt) : new Date(currentTime);
+                    const durationMinutes = differenceInMinutes(clockOutTime, new Date(entry.clockInAt));
 
                     return (
                       <TableRow key={entry.id} className="border-neutral-900">
@@ -100,9 +127,7 @@ export default function AdminDashboard({ workers, workplacesCount, recentEntries
                         <TableCell className="hidden md:table-cell">
                           {entry.clockOutAt ? format(new Date(entry.clockOutAt), 'MMM d, p') : 'Active'}
                         </TableCell>
-                        <TableCell className="text-right">
-                          {durationMinutes !== null ? `${durationMinutes} min` : '—'}
-                        </TableCell>
+                        <TableCell className="text-right">{formatMinutes(durationMinutes)}</TableCell>
                       </TableRow>
                     );
                   })
@@ -141,4 +166,3 @@ export default function AdminDashboard({ workers, workplacesCount, recentEntries
     </div>
   );
 }
-
