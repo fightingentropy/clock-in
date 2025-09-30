@@ -71,11 +71,17 @@ export default function AdminDashboard({ workers, workplaces, recentEntries }: A
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [busyWorkplaceId, setBusyWorkplaceId] = useState<string | null>(null);
 
+  const workplaceDefaults: WorkplaceForm = {
+    name: '',
+    latitude: '',
+    longitude: '',
+    radiusMeters: '50',
+    address: '',
+  };
+
   const form = useForm<WorkplaceForm>({
     resolver: zodResolver(workplaceSchema),
-    defaultValues: {
-      radiusMeters: '50',
-    },
+    defaultValues: workplaceDefaults,
   });
 
   const activeWorkers = useMemo(
@@ -109,7 +115,7 @@ export default function AdminDashboard({ workers, workplaces, recentEntries }: A
 
       toast.success('Workplace created.');
       setDialogOpen(false);
-      form.reset({ radiusMeters: '50' });
+      form.reset(workplaceDefaults);
       router.refresh();
     } catch (error) {
       console.error(error);
