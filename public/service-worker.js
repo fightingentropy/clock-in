@@ -1,5 +1,5 @@
-const CACHE_NAME = 'clock-in-hq-v1';
-const OFFLINE_URLS = ['/', '/login'];
+const CACHE_NAME = 'clock-in-hq-v2';
+const OFFLINE_URLS = ['/login'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -28,25 +28,57 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) {
-        return cached;
-      }
+  const shouldHandle = new URL(request.url).origin === self.location.origin;
 
-      return fetch(request)
-        .then((response) => {
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
-          }
+  if (request.mode === 'navigate' && shouldHandle) {
+    event.respondWith(handleNavigationRequest(request));
+    return;
+  }
 
-          const clonedResponse = response.clone();
+  if (!shouldHandle) {
+    return;
+  }
 
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clonedResponse));
-
-          return response;
-        })
-        .catch(() => caches.match('/'));
-    })
-  );
+  event.respondWith(handleAssetRequest(request));
 });
+
+async function handleNavigationRequest(request) {
+  try {
+    const networkResponse = await fetch(new Request(request, { redirect: 'follow' }));
+
+    if (networkResponse && networkResponse.status === 200) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, networkResponse.clone());
+    }
+
+    return networkResponse;
+  } catch {
+    const cached = await caches.match(request);
+    if (cached) {
+      return cached;
+    }
+
+    const fallback = await caches.match('/login');
+    return fallback ?? Response.error();
+  }
+}
+
+async function handleAssetRequest(request) {
+  const cached = await caches.match(request);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const networkResponse = await fetch(request);
+
+    if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, networkResponse.clone());
+    }
+
+    return networkResponse;
+  } catch {
+    return (await caches.match('/login')) ?? Response.error();
+  }
+}
