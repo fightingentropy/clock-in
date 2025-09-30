@@ -5,7 +5,17 @@ import { compare } from 'bcryptjs';
 import { prisma } from './prisma';
 import { LOGIN_ROUTE } from './routes';
 
+const nextAuthSecret = process.env.NEXTAUTH_SECRET ??
+  (process.env.NODE_ENV !== 'production' ? 'insecure-development-secret' : undefined);
+
+if (!nextAuthSecret) {
+  throw new Error('NEXTAUTH_SECRET must be set in production environments.');
+}
+
+process.env.NEXTAUTH_SECRET = nextAuthSecret;
+
 export const authOptions: NextAuthOptions = {
+  secret: nextAuthSecret,
   session: {
     strategy: 'jwt',
   },
