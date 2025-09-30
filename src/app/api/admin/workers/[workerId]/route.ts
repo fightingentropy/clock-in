@@ -11,14 +11,17 @@ const updateWorkerSchema = z.object({
   workplaceIds: z.array(z.string()).default([]),
 });
 
-export async function PATCH(request: Request, context: { params: { workerId: string } }) {
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ workerId: string }> }
+) {
   const { session, error } = await enforceAuth(Role.ADMIN);
 
   if (!session) {
     return error;
   }
 
-  const { workerId } = context.params;
+  const { workerId } = await context.params;
 
   const payload = await request.json().catch(() => null);
 
@@ -83,7 +86,6 @@ export async function PATCH(request: Request, context: { params: { workerId: str
       if (toAdd.length > 0) {
         await tx.assignment.createMany({
           data: toAdd.map((workplaceId) => ({ userId: workerId, workplaceId })),
-          skipDuplicates: true,
         });
       }
     });
