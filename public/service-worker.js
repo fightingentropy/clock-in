@@ -44,25 +44,10 @@ self.addEventListener('fetch', (event) => {
 
 async function handleNavigationRequest(request) {
   try {
-    const networkResponse = await fetch(request.url, {
-      method: request.method,
-      headers: request.headers,
-      redirect: 'follow',
-      credentials: 'include',
-    });
+    const networkResponse = await fetch(request);
 
-    if (networkResponse?.type === 'opaqueredirect') {
-      const cachedLogin = await caches.match('/login');
-      if (cachedLogin) {
-        return cachedLogin.clone();
-      }
-
-      const loginResponse = await fetch('/login', { redirect: 'follow' });
-      return new Response(await loginResponse.clone().blob(), {
-        status: loginResponse.status,
-        statusText: loginResponse.statusText,
-        headers: loginResponse.headers,
-      });
+    if (isRedirectResponse(networkResponse)) {
+      return fetchLoginFallback();
     }
 
     if (networkResponse && networkResponse.ok && networkResponse.type === 'basic') {
@@ -77,8 +62,35 @@ async function handleNavigationRequest(request) {
       return cached;
     }
 
-    const fallback = await caches.match('/login');
-    return fallback ?? Response.error();
+    return fetchLoginFallback();
+  }
+}
+
+function isRedirectResponse(response) {
+  return (
+    response?.type === 'opaqueredirect' ||
+    (response?.status >= 300 && response?.status < 400)
+  );
+}
+
+async function fetchLoginFallback() {
+  const cachedLogin = await caches.match('/login');
+  if (cachedLogin) {
+    return cachedLogin.clone();
+  }
+
+  try {
+    const loginRequest = new Request('/login', { redirect: 'follow', credentials: 'include' });
+    const loginResponse = await fetch(loginRequest);
+
+    if (loginResponse && loginResponse.ok && loginResponse.type === 'basic') {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(loginRequest, loginResponse.clone());
+    }
+
+    return loginResponse;
+  } catch {
+    return Response.error();
   }
 }
 
