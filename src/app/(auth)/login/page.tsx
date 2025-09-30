@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-import { ADMIN_ROUTE, WORKER_ROUTE } from '@/lib/routes';
+import { ADMIN_ROUTE, HOME_ROUTE, WORKER_ROUTE } from '@/lib/routes';
 import { getAuthSession } from '@/lib/session';
 
 import { LoginForm } from './login-form';
@@ -29,7 +29,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = searchParams ? await searchParams : undefined;
 
   const callbackParam = typeof params?.callbackUrl === 'string' ? params.callbackUrl : undefined;
-  const callbackUrl = callbackParam && isSafeRelativeUrl(callbackParam) ? callbackParam : ADMIN_ROUTE;
+  const callbackUrl = callbackParam && isSafeRelativeUrl(callbackParam) ? callbackParam : HOME_ROUTE;
 
   const email = typeof params?.email === 'string' ? params.email : '';
   const errorParam = typeof params?.error === 'string' ? params.error : undefined;
