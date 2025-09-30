@@ -1,8 +1,10 @@
 import { withAuth } from 'next-auth/middleware';
 
+import { LOGIN_ROUTE } from '@/lib/routes';
+
 export default withAuth({
   pages: {
-    signIn: '/login',
+    signIn: LOGIN_ROUTE,
   },
 });
 

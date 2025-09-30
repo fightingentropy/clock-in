@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { LOGIN_ROUTE } from '@/lib/routes';
 
 const SECTIONS = [
   { label: 'Operations dashboard', href: '/admin' },
@@ -58,7 +59,7 @@ export function AdminNavigation() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
-            signOut({ callbackUrl: '/login' });
+            signOut({ callbackUrl: LOGIN_ROUTE });
           }}
           className="cursor-pointer text-red-400 focus:text-red-300"
         >

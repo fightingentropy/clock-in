@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { distanceInMeters } from '@/lib/geoutils';
+import { LOGIN_ROUTE } from '@/lib/routes';
 import { useNow } from '@/hooks/use-now';
 
 interface WorkerDashboardProps {
@@ -174,7 +175,7 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
           <h1 className="text-3xl font-semibold">Welcome back</h1>
           <p className="text-sm text-neutral-400">Your location helps confirm you are on-site before starting a shift.</p>
         </div>
-        <Button variant="outline" onClick={() => signOut({ callbackUrl: '/login' })}>
+        <Button variant="outline" onClick={() => signOut({ callbackUrl: LOGIN_ROUTE })}>
           Sign out
         </Button>
       </header>

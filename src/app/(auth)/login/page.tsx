@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { signIn } from 'next-auth/react';
+import { getSession, signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { ADMIN_ROUTE, HOME_ROUTE, WORKER_ROUTE } from '@/lib/routes';
 
 const schema = z.object({
   email: z.string().email(),
@@ -48,7 +49,18 @@ export default function LoginPage() {
       return;
     }
 
-    router.replace('/');
+    const session = await getSession();
+
+    if (session?.user?.role === 'ADMIN') {
+      router.replace(ADMIN_ROUTE);
+    } else if (session?.user?.role === 'WORKER') {
+      router.replace(WORKER_ROUTE);
+    } else {
+      router.replace(HOME_ROUTE);
+    }
+
+    router.refresh();
+    setSubmitting(false);
   });
 
   return (

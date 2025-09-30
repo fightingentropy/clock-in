@@ -2,6 +2,7 @@ import { Role } from '@prisma/client';
 import { redirect } from 'next/navigation';
 
 import WorkerDashboard from '@/components/worker/dashboard';
+import { ADMIN_ROUTE, LOGIN_ROUTE } from '@/lib/routes';
 import { getAuthSession } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 
@@ -9,11 +10,11 @@ export default async function WorkerPage() {
   const session = await getAuthSession();
 
   if (!session) {
-    redirect('/login');
+    redirect(LOGIN_ROUTE);
   }
 
   if (session.user.role !== Role.WORKER) {
-    redirect('/admin');
+    redirect(ADMIN_ROUTE);
   }
 
   const [assignments, activeEntry, recentEntries] = await Promise.all([

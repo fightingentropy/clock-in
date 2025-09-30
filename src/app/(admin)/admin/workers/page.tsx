@@ -3,17 +3,18 @@ import { redirect } from 'next/navigation';
 
 import { AdminWorkerDirectory } from '@/components/admin/worker-directory';
 import { prisma } from '@/lib/prisma';
+import { LOGIN_ROUTE, WORKER_ROUTE } from '@/lib/routes';
 import { getAuthSession } from '@/lib/session';
 
 export default async function AdminWorkersPage() {
   const session = await getAuthSession();
 
   if (!session) {
-    redirect('/login');
+    redirect(LOGIN_ROUTE);
   }
 
   if (session.user.role !== Role.ADMIN) {
-    redirect('/worker');
+    redirect(WORKER_ROUTE);
   }
 
   const [workers, workplaces] = await Promise.all([
@@ -33,4 +34,3 @@ export default async function AdminWorkersPage() {
 
   return <AdminWorkerDirectory workers={workers} workplaces={workplaces} />;
 }
-

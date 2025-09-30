@@ -3,17 +3,18 @@ import { redirect } from 'next/navigation';
 
 import { AdminWorkplaceManagement } from '@/components/admin/workplace-management';
 import { prisma } from '@/lib/prisma';
+import { LOGIN_ROUTE, WORKER_ROUTE } from '@/lib/routes';
 import { getAuthSession } from '@/lib/session';
 
 export default async function AdminWorkplacesPage() {
   const session = await getAuthSession();
 
   if (!session) {
-    redirect('/login');
+    redirect(LOGIN_ROUTE);
   }
 
   if (session.user.role !== Role.ADMIN) {
-    redirect('/worker');
+    redirect(WORKER_ROUTE);
   }
 
   const workplaces = await prisma.workplace.findMany({
@@ -27,4 +28,3 @@ export default async function AdminWorkplacesPage() {
 
   return <AdminWorkplaceManagement workplaces={workplaces} />;
 }
-
