@@ -1,7 +1,20 @@
+import 'dotenv/config';
 import { PrismaClient, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { PrismaLibSQL } from '@prisma/adapter-libsql';
 
-const prisma = new PrismaClient();
+const tursoUrl = process.env.TURSO_DATABASE_URL ?? process.env.DATABASE_URL;
+
+if (!tursoUrl) {
+  throw new Error('Missing TURSO_DATABASE_URL or DATABASE_URL for seeding.');
+}
+
+const prisma = new PrismaClient({
+  adapter: new PrismaLibSQL({
+    url: tursoUrl,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  }),
+});
 
 async function main() {
   const adminPassword = await bcrypt.hash('admin123', 10);
