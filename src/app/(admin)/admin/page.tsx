@@ -16,7 +16,7 @@ export default async function AdminPage() {
     redirect('/worker');
   }
 
-  const [workers, workplaces, recentEntries] = await Promise.all([
+  const [workers, workplacesCount, recentEntries] = await Promise.all([
     prisma.user.findMany({
       where: { role: Role.WORKER },
       include: {
@@ -30,14 +30,7 @@ export default async function AdminPage() {
       },
       orderBy: { name: 'asc' },
     }),
-    prisma.workplace.findMany({
-      include: {
-        assignments: {
-          include: { user: true },
-        },
-      },
-      orderBy: { name: 'asc' },
-    }),
+    prisma.workplace.count(),
     prisma.timeEntry.findMany({
       include: {
         user: true,
@@ -48,5 +41,5 @@ export default async function AdminPage() {
     }),
   ]);
 
-  return <AdminDashboard workers={workers} workplaces={workplaces} recentEntries={recentEntries} />;
+  return <AdminDashboard workers={workers} workplacesCount={workplacesCount} recentEntries={recentEntries} />;
 }

@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 
 const SECTIONS = [
   { label: 'Operations dashboard', href: '/admin' },
+  { label: 'Workplaces', href: '/admin/workplaces' },
   { label: 'Worker directory', href: '/admin/workers' },
 ];
 
