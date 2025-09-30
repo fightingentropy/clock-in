@@ -22,27 +22,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+type WorkplaceWithAssignments = Workplace & {
+  assignments: (Assignment & { user: User })[];
+};
 
 interface AdminDashboardProps {
   workers: (User & {
     assignments: (Assignment & { workplace: Workplace })[];
     timeEntries: (TimeEntry & { workplace: Workplace })[];
   })[];
-  workplaces: (Workplace & {
-    assignments: (Assignment & { user: User })[];
-  })[];
+  workplaces: WorkplaceWithAssignments[];
   recentEntries: (TimeEntry & { user: User; workplace: Workplace })[];
 }
 
@@ -70,6 +64,10 @@ export default function AdminDashboard({ workers, workplaces, recentEntries }: A
   const router = useRouter();
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [busyWorkplaceId, setBusyWorkplaceId] = useState<string | null>(null);
+  const [isEditDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingWorkplace, setEditingWorkplace] = useState<WorkplaceWithAssignments | null>(null);
+  const [isSavingWorkplace, setSavingWorkplace] = useState(false);
+  const [isDeletingWorkplace, setDeletingWorkplace] = useState(false);
 
   const workplaceDefaults: WorkplaceForm = {
     name: '',
@@ -80,6 +78,11 @@ export default function AdminDashboard({ workers, workplaces, recentEntries }: A
   };
 
   const form = useForm<WorkplaceForm>({
+    resolver: zodResolver(workplaceSchema),
+    defaultValues: workplaceDefaults,
+  });
+
+  const editForm = useForm<WorkplaceForm>({
     resolver: zodResolver(workplaceSchema),
     defaultValues: workplaceDefaults,
   });
@@ -123,31 +126,6 @@ export default function AdminDashboard({ workers, workplaces, recentEntries }: A
     }
   }
 
-  async function assignWorker(workplaceId: string, userId: string) {
-    try {
-      setBusyWorkplaceId(workplaceId);
-      const response = await fetch(`/api/admin/workplaces/${workplaceId}/assign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        toast.error(data.error ?? 'Failed to assign worker.');
-        return;
-      }
-
-      toast.success('Worker assigned.');
-      router.refresh();
-    } catch (error) {
-      console.error(error);
-      toast.error('Unexpected error while assigning worker.');
-    } finally {
-      setBusyWorkplaceId(null);
-    }
-  }
-
   async function removeAssignment(workplaceId: string, userId: string) {
     try {
       setBusyWorkplaceId(workplaceId);
@@ -168,6 +146,91 @@ export default function AdminDashboard({ workers, workplaces, recentEntries }: A
       toast.error('Unexpected error while removing assignment.');
     } finally {
       setBusyWorkplaceId(null);
+    }
+  }
+
+  function openEditDialog(workplace: WorkplaceWithAssignments) {
+    setEditingWorkplace(workplace);
+    editForm.reset({
+      name: workplace.name,
+      latitude: String(workplace.latitude),
+      longitude: String(workplace.longitude),
+      radiusMeters: String(workplace.radiusMeters),
+      address: workplace.address ?? '',
+    });
+    setEditDialogOpen(true);
+  }
+
+  function closeEditDialog() {
+    setEditDialogOpen(false);
+    setEditingWorkplace(null);
+    editForm.reset(workplaceDefaults);
+  }
+
+  async function updateWorkplace(values: WorkplaceForm) {
+    if (!editingWorkplace) return;
+
+    try {
+      setSavingWorkplace(true);
+      const payload = {
+        name: values.name,
+        latitude: Number(values.latitude),
+        longitude: Number(values.longitude),
+        radiusMeters: Number(values.radiusMeters),
+        address: values.address?.trim() ? values.address : undefined,
+      };
+
+      const response = await fetch(`/api/admin/workplaces/${editingWorkplace.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error ?? 'Failed to update workplace.');
+        return;
+      }
+
+      toast.success('Workplace updated.');
+      closeEditDialog();
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      toast.error('Unexpected error while updating workplace.');
+    } finally {
+      setSavingWorkplace(false);
+    }
+  }
+
+  async function deleteWorkplace() {
+    if (!editingWorkplace) return;
+
+    const confirmed = window.confirm('Delete this workplace? This action cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+      setDeletingWorkplace(true);
+      const response = await fetch(`/api/admin/workplaces/${editingWorkplace.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error ?? 'Failed to delete workplace.');
+        return;
+      }
+
+      toast.success('Workplace deleted.');
+      closeEditDialog();
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      toast.error('Unexpected error while deleting workplace.');
+    } finally {
+      setDeletingWorkplace(false);
     }
   }
 
@@ -298,76 +361,155 @@ export default function AdminDashboard({ workers, workplaces, recentEntries }: A
           {workplaces.length === 0 ? (
             <p className="text-sm text-neutral-500">No workplaces yet. Create one to start assigning workers.</p>
           ) : (
-            workplaces.map((workplace) => {
-              const assignedIds = new Set(workplace.assignments.map((assignment) => assignment.userId));
-              const availableWorkers = workers.filter((worker) => !assignedIds.has(worker.id));
-
-              return (
-                <Card key={workplace.id} className="border-neutral-800 bg-neutral-900/60">
-                  <CardHeader className="flex flex-row items-start justify-between gap-4">
-                    <div>
-                      <CardTitle>{workplace.name}</CardTitle>
-                      <CardDescription>
-                        {Number(workplace.latitude).toFixed(5)}, {Number(workplace.longitude).toFixed(5)} ·{' '}
-                        {workplace.radiusMeters} m radius
-                      </CardDescription>
-                      {workplace.address ? (
-                        <p className="text-sm text-neutral-400">{workplace.address}</p>
-                      ) : null}
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="border-neutral-700">
-                          Manage
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="border-neutral-800 bg-neutral-900 text-neutral-100">
-                        <DropdownMenuLabel>Assign worker</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {availableWorkers.length === 0 ? (
-                          <DropdownMenuItem disabled>No available workers</DropdownMenuItem>
-                        ) : (
-                          availableWorkers.map((worker) => (
-                            <DropdownMenuItem
-                              key={worker.id}
-                              onClick={() => assignWorker(workplace.id, worker.id)}
-                              disabled={busyWorkplaceId === workplace.id}
-                            >
-                              {worker.name}
-                            </DropdownMenuItem>
-                          ))
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-sm text-neutral-400">Assigned workers</p>
-                    <div className="flex flex-wrap gap-2">
-                      {workplace.assignments.length === 0 ? (
-                        <Badge variant="secondary">No one assigned</Badge>
-                      ) : (
-                        workplace.assignments.map((assignment) => (
-                          <Badge key={assignment.id} variant="secondary" className="gap-2">
-                            {assignment.user.name}
-                            <button
-                              type="button"
-                              className="rounded bg-neutral-800 px-1 text-xs text-neutral-300 hover:bg-neutral-700"
-                              onClick={() => removeAssignment(workplace.id, assignment.userId)}
-                              disabled={busyWorkplaceId === workplace.id}
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ))
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })
+            workplaces.map((workplace) => (
+              <Card key={workplace.id} className="border-neutral-800 bg-neutral-900/60">
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>{workplace.name}</CardTitle>
+                    <CardDescription>
+                      {Number(workplace.latitude).toFixed(5)}, {Number(workplace.longitude).toFixed(5)} · {workplace.radiusMeters} m
+                      radius
+                    </CardDescription>
+                    {workplace.address ? (
+                      <p className="text-sm text-neutral-400">{workplace.address}</p>
+                    ) : null}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-neutral-700"
+                    onClick={() => openEditDialog(workplace)}
+                  >
+                    Manage
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-neutral-400">Assigned workers</p>
+                  <div className="flex flex-wrap gap-2">
+                    {workplace.assignments.length === 0 ? (
+                      <Badge variant="secondary">No one assigned</Badge>
+                    ) : (
+                      workplace.assignments.map((assignment) => (
+                        <Badge key={assignment.id} variant="secondary" className="gap-2">
+                          {assignment.user.name}
+                          <button
+                            type="button"
+                            className="rounded bg-neutral-800 px-1 text-xs text-neutral-300 hover:bg-neutral-700"
+                            onClick={() => removeAssignment(workplace.id, assignment.userId)}
+                            disabled={busyWorkplaceId === workplace.id}
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
           )}
         </div>
       </section>
+
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeEditDialog();
+          }
+        }}
+      >
+        <DialogContent className="border-neutral-800 bg-neutral-900 text-neutral-100">
+          <DialogHeader>
+            <DialogTitle>{editingWorkplace ? `Edit ${editingWorkplace.name}` : 'Edit workplace'}</DialogTitle>
+            <DialogDescription>Update location details or delete the workplace.</DialogDescription>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form className="grid gap-4" onSubmit={editForm.handleSubmit(updateWorkplace)}>
+              <FormField
+                control={editForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Warehouse A" className="bg-neutral-950/80" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField
+                  control={editForm.control}
+                  name="latitude"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Latitude</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.00001" placeholder="40.7128" className="bg-neutral-950/80" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="longitude"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Longitude</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.00001" placeholder="-74.0060" className="bg-neutral-950/80" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={editForm.control}
+                name="radiusMeters"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Radius (m)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="1" placeholder="50" className="bg-neutral-950/80" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="123 Main St" className="bg-neutral-950/80" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={deleteWorkplace}
+                  disabled={isDeletingWorkplace || isSavingWorkplace}
+                >
+                  {isDeletingWorkplace ? 'Deleting…' : 'Delete workplace'}
+                </Button>
+                <Button type="submit" disabled={isSavingWorkplace || isDeletingWorkplace}>
+                  {isSavingWorkplace ? 'Saving…' : 'Save changes'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
