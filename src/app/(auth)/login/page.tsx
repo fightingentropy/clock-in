@@ -15,6 +15,9 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 const isSafeRelativeUrl = (value: string) => value.startsWith('/') && !value.startsWith('//');
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const session = await getAuthSession();
 
