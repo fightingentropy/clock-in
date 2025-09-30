@@ -44,10 +44,7 @@ self.addEventListener('fetch', (event) => {
 
 async function handleNavigationRequest(request) {
   try {
-    const followRequest =
-      request.redirect === 'follow' ? request : new Request(request, { redirect: 'follow' });
-
-    const networkResponse = await fetch(followRequest);
+    const networkResponse = await fetch(request, { redirect: 'follow' });
 
     if (networkResponse?.type === 'opaqueredirect') {
       return fetch('/login', { redirect: 'follow' });
