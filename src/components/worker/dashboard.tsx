@@ -4,7 +4,6 @@ import type { Assignment, TimeEntry, Workplace } from '@prisma/client';
 import { differenceInMinutes, format, formatDuration, intervalToDuration } from 'date-fns';
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { signOut } from 'next-auth/react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +13,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { distanceInMeters } from '@/lib/geoutils';
-import { LOGIN_ROUTE } from '@/lib/routes';
 import { formatMinutes } from '@/lib/utils';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useNow } from '@/hooks/use-now';
