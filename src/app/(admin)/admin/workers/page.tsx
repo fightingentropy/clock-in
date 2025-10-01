@@ -1,24 +1,13 @@
-import { Role } from '@prisma/client';
-import { redirect } from 'next/navigation';
-
 import { AdminWorkerDirectory } from '@/components/admin/worker-directory';
 import { prisma } from '@/lib/prisma';
-import { LOGIN_ROUTE, WORKER_ROUTE } from '@/lib/routes';
-import { getAuthSession } from '@/lib/session';
+import { requireRole } from '@/lib/session';
+import { Role } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AdminWorkersPage() {
-  const session = await getAuthSession();
-
-  if (!session) {
-    redirect(LOGIN_ROUTE);
-  }
-
-  if (session.user.role !== Role.ADMIN) {
-    redirect(WORKER_ROUTE);
-  }
+  await requireRole('ADMIN');
 
   const [workers, workplaces] = await Promise.all([
     prisma.user.findMany({

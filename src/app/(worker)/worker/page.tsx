@@ -1,24 +1,12 @@
-import { Role } from '@prisma/client';
-import { redirect } from 'next/navigation';
-
 import WorkerDashboard from '@/components/worker/dashboard';
-import { ADMIN_ROUTE, LOGIN_ROUTE } from '@/lib/routes';
-import { getAuthSession } from '@/lib/session';
+import { requireRole } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function WorkerPage() {
-  const session = await getAuthSession();
-
-  if (!session) {
-    redirect(LOGIN_ROUTE);
-  }
-
-  if (session.user.role !== Role.WORKER) {
-    redirect(ADMIN_ROUTE);
-  }
+  const session = await requireRole('WORKER');
 
   const [assignments, activeEntry, recentEntries] = await Promise.all([
     prisma.assignment.findMany({

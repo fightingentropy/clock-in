@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-import { ADMIN_ROUTE, HOME_ROUTE, WORKER_ROUTE } from '@/lib/routes';
+import { HOME_ROUTE, getDashboardRouteForRole } from '@/lib/routes';
 import { getAuthSession } from '@/lib/session';
 
 import { LoginForm } from './login-form';
@@ -22,8 +22,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const session = await getAuthSession();
 
   if (session) {
-    const target = session.user.role === 'ADMIN' ? ADMIN_ROUTE : WORKER_ROUTE;
-    redirect(target);
+    redirect(getDashboardRouteForRole(session.user.role, HOME_ROUTE));
   }
 
   const params = searchParams ? await searchParams : undefined;

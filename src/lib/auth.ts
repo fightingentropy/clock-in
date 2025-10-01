@@ -3,7 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { compare } from 'bcryptjs';
 
 import { prisma } from './prisma';
-import { LOGIN_ROUTE } from './routes';
+import { LOGIN_ROUTE, getDashboardRouteForRole } from './routes';
 
 const nextAuthSecret = process.env.NEXTAUTH_SECRET ??
   (process.env.NODE_ENV !== 'production' ? 'insecure-development-secret' : undefined);
@@ -58,6 +58,14 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider === 'credentials') {
+        const role = (user as { role?: string | null })?.role;
+        return getDashboardRouteForRole(role);
+      }
+
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
