@@ -42,32 +42,17 @@ export function LoginForm({ defaultEmail = '', callbackUrl, initialError }: Logi
 
     try {
       const result = await signIn('credentials', {
-        redirect: false,
+        redirect: true,
         email: values.email,
         password: values.password,
         callbackUrl,
       });
 
+      // This code will only run if redirect: false, but we're using redirect: true
+      // so NextAuth will handle the redirect automatically
       if (result?.error) {
         setError('Invalid credentials. Please try again.');
         setSubmitting(false);
-        return;
-      }
-
-      const targetUrl = result?.url ?? callbackUrl;
-
-      if (targetUrl) {
-        try {
-          const resolved = new URL(targetUrl, window.location.origin);
-          if (resolved.origin === window.location.origin) {
-            window.location.assign(resolved.toString());
-            return;
-          }
-        } catch (error_) {
-          console.warn('Failed to resolve post-login redirect URL', error_);
-        }
-
-        window.location.assign(callbackUrl);
         return;
       }
 
