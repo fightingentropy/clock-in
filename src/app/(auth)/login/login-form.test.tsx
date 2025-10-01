@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 vi.mock('next-auth/react', () => ({
   signIn: vi.fn(),
+  getSession: vi.fn(),
 }));
 
 const mockRouter = {
@@ -22,10 +23,11 @@ vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
 }));
 
-import { signIn } from 'next-auth/react';
+import { getSession, signIn } from 'next-auth/react';
 import { LoginForm } from './login-form';
 
 const mockSignIn = signIn as unknown as ReturnType<typeof vi.fn>;
+const mockGetSession = getSession as unknown as ReturnType<typeof vi.fn>;
 
 describe('LoginForm', () => {
   beforeEach(() => {
@@ -39,6 +41,12 @@ describe('LoginForm', () => {
       ok: true,
       status: 200,
       url: 'http://localhost/admin',
+    });
+    mockGetSession.mockResolvedValue({
+      user: {
+        id: 'user-1',
+        role: 'ADMIN',
+      },
     });
 
     render(<LoginForm callbackUrl="/admin" />);
@@ -57,21 +65,21 @@ describe('LoginForm', () => {
       }));
     });
 
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
     expect(mockRouter.replace).toHaveBeenCalledWith('/admin');
     expect(mockRouter.refresh).not.toHaveBeenCalled();
   });
 
-  it('refreshes the page when destination matches the current path', async () => {
+  it('shows an error when a session cannot be loaded after sign-in', async () => {
     mockSignIn.mockResolvedValue({
       error: undefined,
       ok: true,
       status: 200,
-      url: 'http://localhost/login',
+      url: 'http://localhost/admin',
     });
+    mockGetSession.mockResolvedValue(null);
 
-    mockPathname = '/login';
-
-    render(<LoginForm callbackUrl="/login" />);
+    render(<LoginForm callbackUrl="/admin" />);
 
     const user = userEvent.setup();
 
@@ -84,6 +92,6 @@ describe('LoginForm', () => {
     });
 
     expect(mockRouter.replace).not.toHaveBeenCalled();
-    expect(mockRouter.refresh).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/could not load your account/i)).toBeInTheDocument();
   });
 });
