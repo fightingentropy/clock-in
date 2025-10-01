@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { distanceInMeters } from '@/lib/geoutils';
 import { LOGIN_ROUTE } from '@/lib/routes';
+import { formatMinutes } from '@/lib/utils';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useNow } from '@/hooks/use-now';
 
@@ -361,7 +362,7 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
                     </p>
                   </div>
                   <Badge variant="secondary">
-                    {durationMinutes !== null ? `${durationMinutes} min` : 'Active'}
+                    {durationMinutes !== null ? formatMinutes(durationMinutes) : 'Active'}
                   </Badge>
                 </div>
               );

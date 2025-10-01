@@ -8,6 +8,7 @@ import { AdminNavigation } from '@/components/admin/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatMinutes } from '@/lib/utils';
 import { useNow } from '@/hooks/use-now';
 import { useHydrated } from '@/hooks/use-hydrated';
 
@@ -36,22 +37,6 @@ export default function AdminDashboard({ workers, workplacesCount, recentEntries
     return format(new Date(value), pattern);
   };
 
-  function formatMinutes(minutes: number | null) {
-    if (minutes === null) return '—';
-
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-
-    if (hours === 0) {
-      return `${remainingMinutes} min`;
-    }
-
-    if (remainingMinutes === 0) {
-      return `${hours} hr${hours > 1 ? 's' : ''}`;
-    }
-
-    return `${hours} hr${hours > 1 ? 's' : ''} ${remainingMinutes} min`;
-  }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
