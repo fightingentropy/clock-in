@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Providers } from '@/components/providers';
+import Navbar from '@/components/navbar';
 import { getAuthSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import './globals.css';
@@ -29,10 +30,13 @@ export default async function RootLayout({
     <html lang="en" className="dark">
       <body
         className={cn(
-          'min-h-screen bg-neutral-950 font-sans text-neutral-100 antialiased'
+          'flex min-h-screen flex-col bg-neutral-950 font-sans text-neutral-100 antialiased'
         )}
       >
-        <Providers session={session}>{children}</Providers>
+        <Providers session={session}>
+          <Navbar />
+          <main className="flex-1">{children}</main>
+        </Providers>
       </body>
     </html>
   );
