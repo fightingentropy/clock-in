@@ -217,9 +217,6 @@ export default function WorkerDashboard({ assignments, activeEntry, recentEntrie
           <h1 className="text-3xl font-semibold">Welcome back</h1>
           <p className="text-sm text-neutral-400">Your location helps confirm you are on-site before starting a shift.</p>
         </div>
-        <Button variant="outline" onClick={() => signOut({ callbackUrl: LOGIN_ROUTE })}>
-          Sign out
-        </Button>
       </header>
 
       <section className="grid gap-6 md:grid-cols-[2fr_1fr]">
