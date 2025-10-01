@@ -2,6 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -25,6 +26,7 @@ type LoginFormProps = {
 };
 
 export function LoginForm({ defaultEmail = '', callbackUrl, initialError }: LoginFormProps) {
+  const router = useRouter();
   const [isSubmitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
 
@@ -42,21 +44,32 @@ export function LoginForm({ defaultEmail = '', callbackUrl, initialError }: Logi
 
     try {
       const result = await signIn('credentials', {
-        redirect: true,
+        redirect: false,
         email: values.email,
         password: values.password,
         callbackUrl,
       });
 
-      // This code will only run if redirect: false, but we're using redirect: true
-      // so NextAuth will handle the redirect automatically
       if (result?.error) {
         setError('Invalid credentials. Please try again.');
         setSubmitting(false);
         return;
       }
 
+      const destination = result?.url
+        ? (() => {
+            try {
+              const url = new URL(result.url);
+              return `${url.pathname}${url.search}${url.hash}`;
+            } catch {
+              return result.url;
+            }
+          })()
+        : callbackUrl;
+
       setSubmitting(false);
+      router.replace(destination);
+      router.refresh();
     } catch (err) {
       console.error(err);
       setError('Something went wrong. Please try again.');
