@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -27,6 +27,7 @@ type LoginFormProps = {
 
 export function LoginForm({ defaultEmail = '', callbackUrl, initialError }: LoginFormProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [isSubmitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
 
@@ -68,7 +69,12 @@ export function LoginForm({ defaultEmail = '', callbackUrl, initialError }: Logi
         : callbackUrl;
 
       setSubmitting(false);
-      router.replace(destination);
+
+      if (destination !== pathname) {
+        router.replace(destination);
+        return;
+      }
+
       router.refresh();
     } catch (err) {
       console.error(err);
