@@ -1,8 +1,8 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { getSession, signIn } from 'next-auth/react';
-import { usePathname, useRouter } from 'next/navigation';
+import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { getDashboardRouteForRole } from '@/lib/routes';
 
 const schema = z.object({
   email: z.string().email(),
@@ -28,7 +27,6 @@ type LoginFormProps = {
 
 export function LoginForm({ defaultEmail = '', callbackUrl, initialError }: LoginFormProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const [isSubmitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
 
@@ -58,15 +56,6 @@ export function LoginForm({ defaultEmail = '', callbackUrl, initialError }: Logi
         return;
       }
 
-      const session = await getSession();
-
-      if (!session?.user?.role) {
-        setError('Signed in but could not load your account. Please try again.');
-        setSubmitting(false);
-        router.refresh();
-        return;
-      }
-
       const resolvedUrl = result?.url
         ? (() => {
             try {
@@ -78,15 +67,8 @@ export function LoginForm({ defaultEmail = '', callbackUrl, initialError }: Logi
           })()
         : callbackUrl;
 
-      const destination = getDashboardRouteForRole(session.user.role, resolvedUrl);
-
       setSubmitting(false);
-
-      if (destination !== pathname) {
-        router.replace(destination);
-        return;
-      }
-
+      router.replace(resolvedUrl);
       router.refresh();
     } catch (err) {
       console.error(err);

@@ -6,46 +6,52 @@ import { ADMIN_ROUTE, HOME_ROUTE, LOGIN_ROUTE, WORKER_ROUTE, getDashboardRouteFo
 export default withAuth(
   (req) => {
     const token = req.nextauth.token;
-
-    if (!token) {
-      return NextResponse.next();
-    }
-
     const pathname = req.nextUrl.pathname;
-    const role = typeof token.role === 'string' ? token.role : undefined;
+    const role = typeof token?.role === 'string' ? token.role : undefined;
     const dashboardRoute = getDashboardRouteForRole(role, '');
     const isAdmin = role === 'ADMIN';
     const isWorker = role === 'WORKER';
     const isInAdminSection = pathname === ADMIN_ROUTE || pathname.startsWith(`${ADMIN_ROUTE}/`);
     const isInWorkerSection = pathname === WORKER_ROUTE || pathname.startsWith(`${WORKER_ROUTE}/`);
+    const shouldDisableCache = isInAdminSection || isInWorkerSection;
+
+    const applyNoStore = <T extends NextResponse>(response: T) => {
+      if (shouldDisableCache) {
+        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        response.headers.set('Pragma', 'no-cache');
+        response.headers.set('Expires', '0');
+      }
+
+      return response;
+    };
 
     if (pathname === LOGIN_ROUTE) {
       if (dashboardRoute) {
-        return NextResponse.redirect(new URL(dashboardRoute, req.url));
+        return applyNoStore(NextResponse.redirect(new URL(dashboardRoute, req.url)));
       }
 
-      return NextResponse.next();
+      return applyNoStore(NextResponse.next());
     }
 
     if (pathname === HOME_ROUTE) {
       if (dashboardRoute) {
-        return NextResponse.redirect(new URL(dashboardRoute, req.url));
+        return applyNoStore(NextResponse.redirect(new URL(dashboardRoute, req.url)));
       }
 
-      return NextResponse.next();
+      return applyNoStore(NextResponse.next());
     }
 
     if (isInAdminSection && !isAdmin) {
       const fallback = dashboardRoute || LOGIN_ROUTE;
-      return NextResponse.redirect(new URL(fallback, req.url));
+      return applyNoStore(NextResponse.redirect(new URL(fallback, req.url)));
     }
 
     if (isInWorkerSection && !isWorker) {
       const fallback = dashboardRoute || LOGIN_ROUTE;
-      return NextResponse.redirect(new URL(fallback, req.url));
+      return applyNoStore(NextResponse.redirect(new URL(fallback, req.url)));
     }
 
-    return NextResponse.next();
+    return applyNoStore(NextResponse.next());
   },
   {
     callbacks: {
