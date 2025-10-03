@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from 'next/cache';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 
@@ -7,6 +8,7 @@ import { LOGIN_ROUTE, getDashboardRouteForRole, type AppUserRole } from './route
 export const getAuthSession = () => getServerSession(authOptions);
 
 export const requireAuthSession = async () => {
+  noStore();
   const session = await getAuthSession();
 
   if (!session) {
@@ -17,6 +19,7 @@ export const requireAuthSession = async () => {
 };
 
 export const requireRole = async (roles: AppUserRole | AppUserRole[]) => {
+  noStore();
   const session = await requireAuthSession();
   const allowed = Array.isArray(roles) ? roles : [roles];
 
