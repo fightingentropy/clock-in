@@ -12,12 +12,20 @@ type GlobalWithDb = typeof globalThis & {
 const globalDb = globalThis as GlobalWithDb;
 
 const createPool = () => {
-  if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is not set");
+  const connectionString =
+    process.env.DATABASE_URL ??
+    process.env.POSTGRES_PRISMA_URL ??
+    process.env.POSTGRES_URL ??
+    process.env.POSTGRES_URL_NON_POOLING;
+
+  if (!connectionString) {
+    throw new Error("Database connection string is not configured");
   }
+
   if (!globalDb.__pool__) {
-    globalDb.__pool__ = new Pool({ connectionString: process.env.DATABASE_URL });
+    globalDb.__pool__ = new Pool({ connectionString });
   }
+
   return globalDb.__pool__;
 };
 
