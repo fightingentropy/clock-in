@@ -171,18 +171,18 @@ const numberFromForm = (value: FormDataEntryValue | null) => {
 };
 
 export const workerClockInAction = async (formData: FormData) => {
-  return workerClockIn({
+  await workerClockIn({
     latitude: numberFromForm(formData.get("latitude")) ?? 0,
     longitude: numberFromForm(formData.get("longitude")) ?? 0,
   });
 };
 
 export const workerClockOutAction = async () => {
-  return workerClockOut();
+  await workerClockOut();
 };
 
 export const updateSelfProfileAction = async (formData: FormData) => {
-  return updateSelfProfile({
+  await updateSelfProfile({
     fullName: formData.get("fullName") ? String(formData.get("fullName")) : undefined,
     phone: formData.get("phone") ? String(formData.get("phone")) : undefined,
   });

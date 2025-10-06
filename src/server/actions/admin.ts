@@ -278,7 +278,7 @@ const getNumber = (value: FormDataEntryValue | null) => {
 };
 
 export const createWorkerAction = async (formData: FormData) => {
-  return createWorker({
+  await createWorker({
     email: getString(formData.get("email")),
     password: getString(formData.get("password")),
     fullName: getString(formData.get("fullName")),
@@ -289,7 +289,7 @@ export const createWorkerAction = async (formData: FormData) => {
 };
 
 export const upsertWorkplaceAction = async (formData: FormData) => {
-  return upsertWorkplace({
+  await upsertWorkplace({
     id: getOptionalString(formData.get("id")),
     name: getString(formData.get("name")),
     description: getOptionalString(formData.get("description")),
@@ -300,27 +300,27 @@ export const upsertWorkplaceAction = async (formData: FormData) => {
 };
 
 export const deleteWorkplaceAction = async (formData: FormData) => {
-  return deleteWorkplace({
+  await deleteWorkplace({
     id: getString(formData.get("id")),
   });
 };
 
 export const assignWorkerAction = async (formData: FormData) => {
-  return assignWorkerToWorkplace({
+  await assignWorkerToWorkplace({
     workerId: getString(formData.get("workerId")),
     workplaceId: getString(formData.get("workplaceId")),
   });
 };
 
 export const removeAssignmentAction = async (formData: FormData) => {
-  return removeWorkerAssignment({
+  await removeWorkerAssignment({
     workerId: getString(formData.get("workerId")),
     workplaceId: getString(formData.get("workplaceId")),
   });
 };
 
 export const adminClockAction = async (formData: FormData) => {
-  return adminClock({
+  await adminClock({
     workerId: getString(formData.get("workerId")),
     workplaceId: getString(formData.get("workplaceId")),
     action: getString(formData.get("action")) as "clock-in" | "clock-out",

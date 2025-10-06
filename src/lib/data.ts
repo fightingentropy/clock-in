@@ -32,12 +32,14 @@ export const fetchWorkerData = async (userId: string) => {
       .returns<AssignmentRow[]>(),
     supabase
       .from("time_entries")
-      .select("id, workplace_id, clock_in_at")
+      .select(
+        "id, worker_id, workplace_id, clock_in_at, clock_out_at, created_by, method, notes, created_at, workplaces(name), worker:worker_id(full_name, email)",
+      )
       .eq("worker_id", userId)
       .is("clock_out_at", null)
       .order("clock_in_at", { ascending: false })
       .limit(1)
-      .maybeSingle<OpenEntry>(),
+      .maybeSingle<TimeEntryWithRelations>(),
     supabase
       .from("time_entries")
       .select(
