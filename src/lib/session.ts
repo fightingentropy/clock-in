@@ -1,38 +1,61 @@
-import type { Session } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 
 import { getSupabaseAdmin, getSupabaseServerComponentClient } from "./supabase";
 
-export const getServerSession = async (): Promise<Session | null> => {
-  const supabase = await getSupabaseServerComponentClient();
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+type AuthState = {
+  session: Session | null;
+  user: User | null;
+};
 
-  if (error) {
-    console.error("Failed to retrieve Supabase session", error);
-    return null;
+const getServerAuthState = async (): Promise<AuthState> => {
+  const supabase = await getSupabaseServerComponentClient();
+
+  const [sessionResult, userResult] = await Promise.all([
+    supabase.auth.getSession(),
+    supabase.auth.getUser(),
+  ]);
+
+  if (sessionResult.error) {
+    console.error("Failed to retrieve Supabase session", sessionResult.error);
   }
 
+  if (userResult.error) {
+    console.error("Failed to retrieve Supabase user", userResult.error);
+  }
+
+  return {
+    session: sessionResult.data?.session ?? null,
+    user: userResult.data?.user ?? null,
+  };
+};
+
+export const getServerSession = async (): Promise<Session | null> => {
+  const { session, user } = await getServerAuthState();
+  if (!user) {
+    return null;
+  }
   return session;
 };
 
-export const requireSession = async () => {
-  const session = await getServerSession();
-  if (!session) {
+export const requireSession = async (): Promise<Session> => {
+  const { session, user } = await getServerAuthState();
+  if (!session || !user) {
     throw new Error("Unauthorized");
   }
   return session;
 };
 
 export const requireProfile = async () => {
-  const session = await requireSession();
+  const { session, user } = await getServerAuthState();
+  if (!session || !user) {
+    throw new Error("Unauthorized");
+  }
   const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase
     .from("user_profiles")
     .select("*")
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .maybeSingle();
 
   if (error) {
@@ -40,11 +63,11 @@ export const requireProfile = async () => {
   }
 
   if (!data) {
-    const metadata = (session.user.user_metadata ?? {}) as Record<string, unknown>;
+    const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
     const fallbackRole = metadata.role === "admin" ? "admin" : "worker";
     const insertPayload = {
-      user_id: session.user.id,
-      email: session.user.email,
+      user_id: user.id,
+      email: user.email,
       full_name: (metadata.full_name as string | undefined) ?? (metadata.name as string | undefined) ?? null,
       role: fallbackRole,
     };
