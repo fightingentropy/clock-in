@@ -1,6 +1,10 @@
 create extension if not exists "uuid-ossp";
 
-create type if not exists user_role as enum ('admin', 'worker');
+DO $$ BEGIN
+    CREATE TYPE user_role AS ENUM ('admin', 'worker');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 create or replace function set_updated_at()
 returns trigger as $$

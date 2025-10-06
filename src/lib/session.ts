@@ -48,8 +48,14 @@ export const requireSession = async (): Promise<Session> => {
 export const requireProfile = async () => {
   const { session, user } = await getServerAuthState();
   if (!session || !user) {
+    console.error("❌ requireProfile: No session or user found");
     throw new Error("Unauthorized");
   }
+  console.log(
+    "✅ requireProfile: Session and user verified for user_id:",
+    user.id,
+  );
+
   const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase
@@ -59,29 +65,49 @@ export const requireProfile = async () => {
     .maybeSingle();
 
   if (error) {
+    console.error(
+      "❌ requireProfile: Error fetching profile from database:",
+      error,
+    );
     throw new Error(error.message);
   }
 
   if (!data) {
+    console.log(
+      "⚠️ requireProfile: No profile found, attempting to create one...",
+    );
     const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
     const fallbackRole = metadata.role === "admin" ? "admin" : "worker";
     const insertPayload = {
       user_id: user.id,
       email: user.email,
-      full_name: (metadata.full_name as string | undefined) ?? (metadata.name as string | undefined) ?? null,
+      full_name:
+        (metadata.full_name as string | undefined) ??
+        (metadata.name as string | undefined) ??
+        null,
       role: fallbackRole,
     };
+    console.log(
+      "📝 requireProfile: Creating profile with payload:",
+      insertPayload,
+    );
     const { data: created, error: createError } = await supabase
       .from("user_profiles")
       .insert(insertPayload)
       .select("*")
       .single();
     if (createError || !created) {
+      console.error(
+        "❌ requireProfile: Failed to create profile:",
+        createError,
+      );
       throw new Error(createError?.message || "Unable to create profile");
     }
+    console.log("✅ requireProfile: Profile created successfully");
     return { session, profile: created };
   }
 
+  console.log("✅ requireProfile: Profile found successfully");
   return { session, profile: data };
 };
 

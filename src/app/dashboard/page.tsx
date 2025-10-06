@@ -9,7 +9,8 @@ const DashboardPage = async () => {
   let profileBundle;
   try {
     profileBundle = await requireProfile();
-  } catch {
+  } catch (error) {
+    console.error("❌ Dashboard: Failed to get profile:", error);
     redirect("/");
   }
 
