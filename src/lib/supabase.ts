@@ -55,13 +55,14 @@ export const getSupabasePublic = () => {
   return publicClient;
 };
 
-type CookieStore = Awaited<ReturnType<typeof cookies>>;
-
 const createCookieContext = async () => {
-  const cookieStore: CookieStore = await cookies();
+  const cookieStore = await cookies();
   return {
-    cookies: async () => cookieStore,
-  } as const;
+    // Supabase helpers expect synchronous cookie access, so reuse the awaited store.
+    cookies: () => cookieStore as unknown as ReturnType<typeof cookies>,
+  } as {
+    cookies: () => ReturnType<typeof cookies>;
+  };
 };
 
 export const getSupabaseServerComponentClient = async () => {
