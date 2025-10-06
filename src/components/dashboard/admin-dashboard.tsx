@@ -7,12 +7,12 @@ import type {
   Workplace,
 } from "@/lib/types";
 import SignOutButton from "@/components/sign-out-button";
+import WorkplaceForm from "@/components/workplace-form";
 import {
   assignWorkerAction,
   createWorkerAction,
   deleteWorkplaceAction,
   removeAssignmentAction,
-  upsertWorkplaceAction,
   adminClockAction,
 } from "@/server/actions/admin";
 import {
@@ -33,7 +33,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 
 interface AdminDashboardProps {
   workers: WorkerWithAssignments[];
@@ -384,41 +383,7 @@ const AdminDashboard = ({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form action={upsertWorkplaceAction} className="grid gap-3">
-                <Input name="name" placeholder="Name" required />
-                <Textarea
-                  name="description"
-                  placeholder="Description (optional)"
-                  rows={3}
-                />
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    name="latitude"
-                    type="number"
-                    step="any"
-                    placeholder="Latitude"
-                    required
-                  />
-                  <Input
-                    name="longitude"
-                    type="number"
-                    step="any"
-                    placeholder="Longitude"
-                    required
-                  />
-                </div>
-                <Input
-                  name="radius_m"
-                  type="number"
-                  min={10}
-                  defaultValue={50}
-                  placeholder="Radius meters"
-                  required
-                />
-                <Button type="submit" className="mt-2">
-                  Save workplace
-                </Button>
-              </form>
+              <WorkplaceForm />
             </CardContent>
           </Card>
         </section>
