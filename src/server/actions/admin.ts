@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Workplace } from "@/lib/types";
-import { auth } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/session";
 
@@ -17,41 +16,27 @@ const createWorkerSchema = z.object({
   workplaceId: z.string().uuid().optional(),
 });
 
-type SignUpUser = {
-  id: string;
-  email: string;
-  name?: string | null;
-};
-
-type SignUpResponse =
-  | {
-      data?: {
-        user?: SignUpUser;
-      };
-    }
-  | {
-      user?: SignUpUser;
-    };
-
 export const createWorker = async (values: z.infer<typeof createWorkerSchema>) => {
   await requireAdmin();
   const input = createWorkerSchema.parse(values);
   const supabase = getSupabaseAdmin();
 
-  const creation = (await auth.api.signUpEmail({
-    body: {
-      email: input.email,
-      password: input.password,
-      name: input.fullName,
+  const { data: userResult, error: userError } = await supabase.auth.admin.createUser({
+    email: input.email,
+    password: input.password,
+    email_confirm: true,
+    user_metadata: {
       role: input.role,
+      full_name: input.fullName,
+      phone: input.phone ?? null,
     },
-  })) as SignUpResponse;
+  });
 
-  const user = creation.data?.user ?? creation.user ?? null;
-
-  if (!user) {
-    throw new Error("Failed to create worker");
+  if (userError || !userResult?.user) {
+    throw new Error(userError?.message ?? "Failed to create worker");
   }
+
+  const user = userResult.user;
 
   const { error: profileError } = await supabase.from("user_profiles").upsert(
     {

@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 
-import { signIn } from "@/lib/auth-client";
+import { signInWithEmail } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
@@ -35,7 +35,7 @@ const LoginForm = () => {
   const onSubmit = (values: FormValues) => {
     setError(null);
     startTransition(async () => {
-      const { error: signInError } = await signIn.email(values);
+      const { error: signInError } = await signInWithEmail(values);
       if (signInError) {
         setError(signInError.message || "Unable to sign in");
         return;

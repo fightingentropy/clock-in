@@ -1,28 +1,20 @@
-import { cookies } from "next/headers";
-import { auth } from "./auth";
-import { getSupabaseAdmin } from "./supabase";
+import type { Session } from "@supabase/supabase-js";
 
-export interface SessionPayload {
-  session: Record<string, unknown>;
-  user: Record<string, unknown>;
-}
+import { getSupabaseAdmin, getSupabaseServerComponentClient } from "./supabase";
 
-export const getServerSession = async (): Promise<SessionPayload | null> => {
-  const cookieStore = cookies();
-  const cookieHeader = cookieStore
-    .getAll()
-    .map((entry) => `${entry.name}=${entry.value}`)
-    .join("; ");
+export const getServerSession = async (): Promise<Session | null> => {
+  const supabase = getSupabaseServerComponentClient();
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
 
-  const result = await auth.api.getSession({
-    headers: cookieHeader ? { cookie: cookieHeader } : {},
-  });
-
-  if (!result || !result.data) {
+  if (error) {
+    console.error("Failed to retrieve Supabase session", error);
     return null;
   }
 
-  return result.data as SessionPayload;
+  return session;
 };
 
 export const requireSession = async () => {
@@ -36,6 +28,7 @@ export const requireSession = async () => {
 export const requireProfile = async () => {
   const session = await requireSession();
   const supabase = getSupabaseAdmin();
+
   const { data, error } = await supabase
     .from("user_profiles")
     .select("*")
@@ -47,11 +40,12 @@ export const requireProfile = async () => {
   }
 
   if (!data) {
-    const fallbackRole = (session.user.role as string | undefined) === "admin" ? "admin" : "worker";
+    const metadata = (session.user.user_metadata ?? {}) as Record<string, unknown>;
+    const fallbackRole = metadata.role === "admin" ? "admin" : "worker";
     const insertPayload = {
       user_id: session.user.id,
       email: session.user.email,
-      full_name: session.user.name ?? null,
+      full_name: (metadata.full_name as string | undefined) ?? (metadata.name as string | undefined) ?? null,
       role: fallbackRole,
     };
     const { data: created, error: createError } = await supabase
