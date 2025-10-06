@@ -1,7 +1,12 @@
 import { formatDistanceToNow } from "date-fns";
 import { Users, Building2, Clock, MapPin } from "lucide-react";
 
-import type { TimeEntryWithRelations, WorkerWithAssignments, Workplace } from "@/lib/types";
+import type {
+  TimeEntryWithRelations,
+  WorkerWithAssignments,
+  Workplace,
+} from "@/lib/types";
+import SignOutButton from "@/components/sign-out-button";
 import {
   assignWorkerAction,
   createWorkerAction,
@@ -10,22 +15,47 @@ import {
   upsertWorkplaceAction,
   adminClockAction,
 } from "@/server/actions/admin";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 
 interface AdminDashboardProps {
   workers: WorkerWithAssignments[];
   workplaces: Workplace[];
-  openEntries: Array<{ worker_id: string; workplace_id: string | null; clock_in_at: string }>;
+  openEntries: Array<{
+    worker_id: string;
+    workplace_id: string | null;
+    clock_in_at: string;
+  }>;
   recentEntries: TimeEntryWithRelations[];
 }
 
-const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: AdminDashboardProps) => {
-  const openMap = new Map<string, { worker_id: string; workplace_id: string | null; clock_in_at: string }>();
+const AdminDashboard = ({
+  workers,
+  workplaces,
+  openEntries,
+  recentEntries,
+}: AdminDashboardProps) => {
+  const openMap = new Map<
+    string,
+    { worker_id: string; workplace_id: string | null; clock_in_at: string }
+  >();
   openEntries?.forEach((entry) => {
     openMap.set(entry.worker_id, entry);
   });
@@ -35,8 +65,12 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
       <header className="border-b border-white/5 bg-black/40 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
           <div>
-            <p className="text-sm uppercase tracking-[0.4em] text-muted-foreground">Admin</p>
-            <h1 className="text-3xl font-semibold text-white">Operations Console</h1>
+            <p className="text-sm uppercase tracking-[0.4em] text-muted-foreground">
+              Admin
+            </p>
+            <h1 className="text-3xl font-semibold text-white">
+              Operations Console
+            </h1>
           </div>
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
@@ -47,6 +81,7 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
               <Building2 className="h-4 w-4" />
               <span>{workplaces?.length ?? 0} workplaces</span>
             </div>
+            <SignOutButton variant="ghost" size="sm" />
           </div>
         </div>
       </header>
@@ -56,16 +91,25 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
           <Card className="border border-white/5 bg-black/40">
             <CardHeader>
               <CardTitle>Create worker</CardTitle>
-              <CardDescription>Provision a new worker or admin account.</CardDescription>
+              <CardDescription>
+                Provision a new worker or admin account.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form action={createWorkerAction} className="grid gap-3">
                 <Input name="fullName" placeholder="Full name" required />
                 <Input name="email" type="email" placeholder="Email" required />
-                <Input name="password" type="password" placeholder="Temporary password" required />
+                <Input
+                  name="password"
+                  type="password"
+                  placeholder="Temporary password"
+                  required
+                />
                 <Input name="phone" placeholder="Phone (optional)" />
                 <div className="grid gap-2">
-                  <label className="text-xs uppercase tracking-wide text-muted-foreground">Role</label>
+                  <label className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Role
+                  </label>
                   <select
                     name="role"
                     defaultValue="worker"
@@ -92,7 +136,9 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
                     ))}
                   </select>
                 </div>
-                <Button type="submit" className="mt-2">Create</Button>
+                <Button type="submit" className="mt-2">
+                  Create
+                </Button>
               </form>
             </CardContent>
           </Card>
@@ -100,18 +146,45 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
           <Card className="border border-white/5 bg-black/40">
             <CardHeader>
               <CardTitle>Create workplace</CardTitle>
-              <CardDescription>Define a location workers can clock into.</CardDescription>
+              <CardDescription>
+                Define a location workers can clock into.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form action={upsertWorkplaceAction} className="grid gap-3">
                 <Input name="name" placeholder="Name" required />
-                <Textarea name="description" placeholder="Description (optional)" rows={3} />
+                <Textarea
+                  name="description"
+                  placeholder="Description (optional)"
+                  rows={3}
+                />
                 <div className="grid grid-cols-2 gap-3">
-                  <Input name="latitude" type="number" step="any" placeholder="Latitude" required />
-                  <Input name="longitude" type="number" step="any" placeholder="Longitude" required />
+                  <Input
+                    name="latitude"
+                    type="number"
+                    step="any"
+                    placeholder="Latitude"
+                    required
+                  />
+                  <Input
+                    name="longitude"
+                    type="number"
+                    step="any"
+                    placeholder="Longitude"
+                    required
+                  />
                 </div>
-                <Input name="radius_m" type="number" min={10} defaultValue={50} placeholder="Radius meters" required />
-                <Button type="submit" className="mt-2">Save workplace</Button>
+                <Input
+                  name="radius_m"
+                  type="number"
+                  min={10}
+                  defaultValue={50}
+                  placeholder="Radius meters"
+                  required
+                />
+                <Button type="submit" className="mt-2">
+                  Save workplace
+                </Button>
               </form>
             </CardContent>
           </Card>
@@ -120,7 +193,9 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
         <Card className="border border-white/5 bg-black/40">
           <CardHeader>
             <CardTitle>Workplaces</CardTitle>
-            <CardDescription>Manage geofenced locations available to workers.</CardDescription>
+            <CardDescription>
+              Manage geofenced locations available to workers.
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             {workplaces?.length ? (
@@ -131,11 +206,17 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-medium text-white">{workplace.name}</h3>
-                      <Badge variant="outline">{workplace.radius_m}m radius</Badge>
+                      <h3 className="text-lg font-medium text-white">
+                        {workplace.name}
+                      </h3>
+                      <Badge variant="outline">
+                        {workplace.radius_m}m radius
+                      </Badge>
                     </div>
                     {workplace.description ? (
-                      <p className="text-sm text-muted-foreground">{workplace.description}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {workplace.description}
+                      </p>
                     ) : null}
                     <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
                       <MapPin className="h-3 w-3" />
@@ -144,16 +225,25 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
                       <span>{Number(workplace.longitude).toFixed(5)}</span>
                     </div>
                   </div>
-                  <form action={deleteWorkplaceAction} className="justify-self-end">
+                  <form
+                    action={deleteWorkplaceAction}
+                    className="justify-self-end"
+                  >
                     <input type="hidden" name="id" value={workplace.id} />
-                    <Button type="submit" variant="ghost" className="text-xs text-destructive hover:text-destructive">
+                    <Button
+                      type="submit"
+                      variant="ghost"
+                      className="text-xs text-destructive hover:text-destructive"
+                    >
                       Delete
                     </Button>
                   </form>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">No workplaces defined yet.</p>
+              <p className="text-sm text-muted-foreground">
+                No workplaces defined yet.
+              </p>
             )}
           </CardContent>
         </Card>
@@ -161,7 +251,9 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
         <Card className="border border-white/5 bg-black/40">
           <CardHeader>
             <CardTitle>Workers</CardTitle>
-            <CardDescription>Assignments, roles, and live status.</CardDescription>
+            <CardDescription>
+              Assignments, roles, and live status.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -185,9 +277,16 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
                       <TableRow key={worker.user_id} className="border-white/5">
                         <TableCell>
                           <div className="space-y-1">
-                            <p className="font-medium text-white">{worker.full_name || worker.email}</p>
-                            <p className="text-xs text-muted-foreground">{worker.email}</p>
-                            <Badge variant="outline" className="text-xs uppercase">
+                            <p className="font-medium text-white">
+                              {worker.full_name || worker.email}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {worker.email}
+                            </p>
+                            <Badge
+                              variant="outline"
+                              className="text-xs uppercase"
+                            >
                               {worker.role}
                             </Badge>
                           </div>
@@ -201,18 +300,40 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
                                   action={removeAssignmentAction}
                                   className="flex items-center gap-2 rounded border border-white/10 bg-black/30 px-2 py-1"
                                 >
-                                  <input type="hidden" name="workerId" value={worker.user_id} />
-                                  <input type="hidden" name="workplaceId" value={workplace.id} />
+                                  <input
+                                    type="hidden"
+                                    name="workerId"
+                                    value={worker.user_id}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="workplaceId"
+                                    value={workplace.id}
+                                  />
                                   <span>{workplace.name}</span>
-                                  <button type="submit" className="text-muted-foreground hover:text-white">×</button>
+                                  <button
+                                    type="submit"
+                                    className="text-muted-foreground hover:text-white"
+                                  >
+                                    ×
+                                  </button>
                                 </form>
                               ))
                             ) : (
-                              <span className="text-muted-foreground">No assignment</span>
+                              <span className="text-muted-foreground">
+                                No assignment
+                              </span>
                             )}
                           </div>
-                          <form action={assignWorkerAction} className="mt-2 flex items-center gap-2 text-xs">
-                            <input type="hidden" name="workerId" value={worker.user_id} />
+                          <form
+                            action={assignWorkerAction}
+                            className="mt-2 flex items-center gap-2 text-xs"
+                          >
+                            <input
+                              type="hidden"
+                              name="workerId"
+                              value={worker.user_id}
+                            />
                             <select
                               name="workplaceId"
                               className="flex-1 rounded-md border border-white/10 bg-transparent px-2 py-1"
@@ -237,17 +358,29 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
                                 <Clock className="h-3 w-3" /> Clocked in
                               </span>
                               <span>
-                                {formatDistanceToNow(new Date(active.clock_in_at), { addSuffix: true })}
+                                {formatDistanceToNow(
+                                  new Date(active.clock_in_at),
+                                  { addSuffix: true },
+                                )}
                               </span>
                             </div>
                           ) : (
-                            <span className="text-xs text-muted-foreground">Off shift</span>
+                            <span className="text-xs text-muted-foreground">
+                              Off shift
+                            </span>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex flex-col items-end gap-2">
-                            <form action={adminClockAction} className="flex gap-2 text-xs">
-                              <input type="hidden" name="workerId" value={worker.user_id} />
+                            <form
+                              action={adminClockAction}
+                              className="flex gap-2 text-xs"
+                            >
+                              <input
+                                type="hidden"
+                                name="workerId"
+                                value={worker.user_id}
+                              />
                               <select
                                 name="workplaceId"
                                 className="rounded-md border border-white/10 bg-transparent px-2 py-1"
@@ -255,21 +388,53 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
                               >
                                 <option value="">Select workplace</option>
                                 {assignments.map((workplace) => (
-                                  <option key={workplace.id} value={workplace.id}>
+                                  <option
+                                    key={workplace.id}
+                                    value={workplace.id}
+                                  >
                                     {workplace.name}
                                   </option>
                                 ))}
                               </select>
-                              <input type="hidden" name="action" value="clock-in" />
-                              <Button type="submit" variant="secondary" size="sm" disabled={!primaryWorkplace}>
+                              <input
+                                type="hidden"
+                                name="action"
+                                value="clock-in"
+                              />
+                              <Button
+                                type="submit"
+                                variant="secondary"
+                                size="sm"
+                                disabled={!primaryWorkplace}
+                              >
                                 Clock in
                               </Button>
                             </form>
-                            <form action={adminClockAction} className="flex gap-2 text-xs">
-                              <input type="hidden" name="workerId" value={worker.user_id} />
-                              <input type="hidden" name="workplaceId" value={primaryWorkplace?.id || ""} />
-                              <input type="hidden" name="action" value="clock-out" />
-                              <Button type="submit" variant="ghost" size="sm" disabled={!primaryWorkplace}>
+                            <form
+                              action={adminClockAction}
+                              className="flex gap-2 text-xs"
+                            >
+                              <input
+                                type="hidden"
+                                name="workerId"
+                                value={worker.user_id}
+                              />
+                              <input
+                                type="hidden"
+                                name="workplaceId"
+                                value={primaryWorkplace?.id || ""}
+                              />
+                              <input
+                                type="hidden"
+                                name="action"
+                                value="clock-out"
+                              />
+                              <Button
+                                type="submit"
+                                variant="ghost"
+                                size="sm"
+                                disabled={!primaryWorkplace}
+                              >
                                 Clock out
                               </Button>
                             </form>
@@ -287,7 +452,9 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
         <Card className="border border-white/5 bg-black/40">
           <CardHeader>
             <CardTitle>Recent time entries</CardTitle>
-            <CardDescription>Chronological log of clock activity.</CardDescription>
+            <CardDescription>
+              Chronological log of clock activity.
+            </CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             {recentEntries?.length ? (
@@ -306,16 +473,24 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
                     <TableRow key={entry.id} className="border-white/5">
                       <TableCell>
                         <div className="text-xs">
-                          <p className="font-medium text-white">{entry.worker?.full_name || entry.worker?.email}</p>
-                          <p className="text-muted-foreground">{entry.worker?.email}</p>
+                          <p className="font-medium text-white">
+                            {entry.worker?.full_name || entry.worker?.email}
+                          </p>
+                          <p className="text-muted-foreground">
+                            {entry.worker?.email}
+                          </p>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm">{entry.workplaces?.name ?? "-"}</TableCell>
+                      <TableCell className="text-sm">
+                        {entry.workplaces?.name ?? "-"}
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {new Date(entry.clock_in_at).toLocaleString()}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {entry.clock_out_at ? new Date(entry.clock_out_at).toLocaleString() : "Active"}
+                        {entry.clock_out_at
+                          ? new Date(entry.clock_out_at).toLocaleString()
+                          : "Active"}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs uppercase">
@@ -327,7 +502,9 @@ const AdminDashboard = ({ workers, workplaces, openEntries, recentEntries }: Adm
                 </TableBody>
               </Table>
             ) : (
-              <p className="text-sm text-muted-foreground">No time entries found.</p>
+              <p className="text-sm text-muted-foreground">
+                No time entries found.
+              </p>
             )}
           </CardContent>
         </Card>
