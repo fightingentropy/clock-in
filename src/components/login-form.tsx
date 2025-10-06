@@ -8,13 +8,28 @@ import { useRouter } from "next/navigation";
 
 import { signInWithEmail } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
 const schema = z.object({
   email: z.string().email({ message: "Enter a valid email" }),
-  password: z.string().min(8, { message: "Password must be at least 8 characters" }),
+  password: z
+    .string()
+    .min(8, { message: "Password must be at least 8 characters" }),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -40,6 +55,7 @@ const LoginForm = () => {
         setError(signInError.message || "Unable to sign in");
         return;
       }
+      router.refresh();
       router.replace("/dashboard");
     });
   };
@@ -48,7 +64,9 @@ const LoginForm = () => {
     <Card className="w-full max-w-md border border-border/50 bg-background/60 backdrop-blur">
       <CardHeader>
         <CardTitle className="text-2xl font-semibold">Clock In</CardTitle>
-        <CardDescription>Sign in to manage or view your shifts.</CardDescription>
+        <CardDescription>
+          Sign in to manage or view your shifts.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -60,7 +78,12 @@ const LoginForm = () => {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input type="email" autoComplete="email" placeholder="you@example.com" {...field} />
+                    <Input
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@example.com"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -73,15 +96,18 @@ const LoginForm = () => {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input type="password" autoComplete="current-password" placeholder="••••••••" {...field} />
+                    <Input
+                      type="password"
+                      autoComplete="current-password"
+                      placeholder="••••••••"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            {error ? (
-              <p className="text-sm text-destructive">{error}</p>
-            ) : null}
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
             <Button type="submit" className="w-full" disabled={isPending}>
               {isPending ? "Signing in..." : "Sign in"}
             </Button>
