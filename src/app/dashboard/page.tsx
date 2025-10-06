@@ -5,6 +5,8 @@ import WorkerDashboard from "@/components/dashboard/worker-dashboard";
 import { fetchAdminData, fetchWorkerData } from "@/lib/data";
 import { requireProfile } from "@/lib/session";
 
+export const dynamic = "force-dynamic";
+
 const DashboardPage = async () => {
   let profileBundle;
   try {
