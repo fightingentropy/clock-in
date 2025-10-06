@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseRouteHandlerClient } from "@/lib/supabase";
 
 export async function POST(request: Request) {
-  const supabase = getSupabaseRouteHandlerClient();
+  const supabase = await getSupabaseRouteHandlerClient();
   const { event, session } = await request.json();
 
   if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {

@@ -3,7 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { getSupabaseAdmin, getSupabaseServerComponentClient } from "./supabase";
 
 export const getServerSession = async (): Promise<Session | null> => {
-  const supabase = getSupabaseServerComponentClient();
+  const supabase = await getSupabaseServerComponentClient();
   const {
     data: { session },
     error,

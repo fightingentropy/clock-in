@@ -55,14 +55,26 @@ export const getSupabasePublic = () => {
   return publicClient;
 };
 
-export const getSupabaseServerComponentClient = () => {
-  return createServerComponentClient({ cookies });
+type CookieStore = Awaited<ReturnType<typeof cookies>>;
+
+const createCookieContext = async () => {
+  const cookieStore: CookieStore = await cookies();
+  return {
+    cookies: () => cookieStore,
+  } as const;
 };
 
-export const getSupabaseServerActionClient = () => {
-  return createServerActionClient({ cookies });
+export const getSupabaseServerComponentClient = async () => {
+  const context = await createCookieContext();
+  return createServerComponentClient(context);
 };
 
-export const getSupabaseRouteHandlerClient = () => {
-  return createRouteHandlerClient({ cookies });
+export const getSupabaseServerActionClient = async () => {
+  const context = await createCookieContext();
+  return createServerActionClient(context);
+};
+
+export const getSupabaseRouteHandlerClient = async () => {
+  const context = await createCookieContext();
+  return createRouteHandlerClient(context);
 };
