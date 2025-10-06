@@ -60,7 +60,7 @@ type CookieStore = Awaited<ReturnType<typeof cookies>>;
 const createCookieContext = async () => {
   const cookieStore: CookieStore = await cookies();
   return {
-    cookies: () => cookieStore,
+    cookies: async () => cookieStore,
   } as const;
 };
 
