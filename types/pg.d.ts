@@ -43,7 +43,7 @@ declare module "pg" {
     fields: QueryField[];
   }
 
-  export interface QueryConfig<R extends QueryResultRow = QueryResultRow> {
+  export interface QueryConfig {
     text: string;
     values?: ReadonlyArray<unknown>;
     rowMode?: "array";
@@ -61,7 +61,7 @@ declare module "pg" {
       parameters?: ReadonlyArray<unknown>,
     ): Promise<QueryResult<R>>;
     query<R extends QueryResultRow = QueryResultRow>(
-      config: QueryConfig<R>,
+      config: QueryConfig,
     ): Promise<QueryResult<R>>;
     query<R extends QueryResultRow = QueryResultRow>(
       cursor: Cursor<R>,
@@ -77,7 +77,7 @@ declare module "pg" {
       parameters?: ReadonlyArray<unknown>,
     ): Promise<QueryResult<R>>;
     query<R extends QueryResultRow = QueryResultRow>(
-      config: QueryConfig<R>,
+      config: QueryConfig,
     ): Promise<QueryResult<R>>;
     end(): Promise<void>;
   }
