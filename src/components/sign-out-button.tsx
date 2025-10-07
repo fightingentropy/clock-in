@@ -8,7 +8,13 @@ import { signOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 
 interface SignOutButtonProps {
-  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
+  variant?:
+    | "default"
+    | "destructive"
+    | "outline"
+    | "secondary"
+    | "ghost"
+    | "link";
   size?: "default" | "sm" | "lg" | "icon";
   className?: string;
 }
@@ -16,7 +22,7 @@ interface SignOutButtonProps {
 export default function SignOutButton({
   variant = "outline",
   size = "default",
-  className = ""
+  className = "",
 }: SignOutButtonProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -27,12 +33,13 @@ export default function SignOutButton({
       const { error } = await signOut();
       if (error) {
         console.error("Sign out error:", error);
+        setIsLoading(false);
+        return;
       }
-      router.push("/");
-      router.refresh();
+      // Force a full page reload to clear all client-side state
+      window.location.href = "/";
     } catch (error) {
       console.error("Sign out failed:", error);
-    } finally {
       setIsLoading(false);
     }
   };
