@@ -6,6 +6,10 @@ import { z } from "zod";
 import type { Workplace } from "@/lib/types";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/session";
+export type CreateWorkerActionState = {
+  status: "idle" | "success" | "error";
+  message: string | null;
+};
 
 const createWorkerSchema = z.object({
   email: z.string().email(),
@@ -277,25 +281,50 @@ const getNumber = (value: FormDataEntryValue | null) => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
-export const createWorkerAction = async (formData: FormData) => {
-  await createWorker({
-    email: getString(formData.get("email")),
-    password: getString(formData.get("password")),
-    fullName: getString(formData.get("fullName")),
-    phone: getOptionalString(formData.get("phone")),
-    role: (getString(formData.get("role")) as "worker" | "admin") || "worker",
-    workplaceId: getOptionalString(formData.get("workplaceId")),
-  });
+export const createWorkerAction = async (
+  _prevState: CreateWorkerActionState,
+  formData: FormData,
+): Promise<CreateWorkerActionState> => {
+  try {
+    await createWorker({
+      email: getString(formData.get("email")),
+      password: getString(formData.get("password")),
+      fullName: getString(formData.get("fullName")),
+      phone: getOptionalString(formData.get("phone")),
+      role: (getString(formData.get("role")) as "worker" | "admin") || "worker",
+      workplaceId: getOptionalString(formData.get("workplaceId")),
+    });
+
+    return {
+      status: "success",
+      message: "Worker created successfully.",
+    };
+  } catch (error) {
+    console.error("Failed to create worker:", error);
+    return {
+      status: "error",
+      message:
+        error instanceof Error ? error.message : "An unexpected error occurred while creating the worker.",
+    };
+  }
 };
 
 export const upsertWorkplaceAction = async (formData: FormData) => {
+  const latitude = getNumber(formData.get("latitude"));
+  const longitude = getNumber(formData.get("longitude"));
+  const radius_m = getNumber(formData.get("radius_m"));
+
+  if (latitude === undefined || longitude === undefined || radius_m === undefined) {
+    throw new Error("Invalid workplace coordinates or radius");
+  }
+
   await upsertWorkplace({
     id: getOptionalString(formData.get("id")),
     name: getString(formData.get("name")),
     description: getOptionalString(formData.get("description")),
-    latitude: getNumber(formData.get("latitude")) ?? 0,
-    longitude: getNumber(formData.get("longitude")) ?? 0,
-    radius_m: getNumber(formData.get("radius_m")) ?? 50,
+    latitude,
+    longitude,
+    radius_m,
   });
 };
 

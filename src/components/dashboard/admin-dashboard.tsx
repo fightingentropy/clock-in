@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Users, Building2, Clock, MapPin } from "lucide-react";
 
@@ -37,6 +37,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  initialCreateWorkerState,
+  type CreateWorkerActionState,
+} from "@/lib/action-states/create-worker";
+import Toast from "@/components/ui/toast";
 
 interface AdminDashboardProps {
   workers: WorkerWithAssignments[];
@@ -56,6 +69,22 @@ const AdminDashboard = ({
   recentEntries,
 }: AdminDashboardProps) => {
   const [activeTab, setActiveTab] = useState("overview");
+  const [formState, dispatch] = useActionState<CreateWorkerActionState, FormData>(
+    createWorkerAction,
+    initialCreateWorkerState,
+  );
+  const [showNotification, setShowNotification] = useState(false);
+  const createWorkerFormRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (formState.status === "success" || formState.status === "error") {
+      setShowNotification(true);
+    }
+
+    if (formState.status === "success") {
+      createWorkerFormRef.current?.reset();
+    }
+  }, [formState]);
 
   const openMap = new Map<
     string,
@@ -409,11 +438,11 @@ const AdminDashboard = ({
                             {entry.workplaces?.name ?? "-"}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {new Date(entry.clock_in_at).toLocaleString()}
+                            {new Date(entry.clock_in_at).toISOString()}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {entry.clock_out_at
-                              ? new Date(entry.clock_out_at).toLocaleString()
+                              ? new Date(entry.clock_out_at).toISOString()
                               : "Active"}
                           </TableCell>
                           <TableCell>
@@ -463,6 +492,7 @@ const AdminDashboard = ({
                           .filter((item): item is Workplace => Boolean(item));
                         const primaryWorkplace = assignments[0];
                         const active = openMap.get(worker.user_id);
+                        const activeWorkplaceId = active?.workplace_id ?? primaryWorkplace?.id ?? "";
                         return (
                           <TableRow
                             key={worker.user_id}
@@ -584,7 +614,7 @@ const AdminDashboard = ({
                                   <select
                                     name="workplaceId"
                                     className="rounded-md border border-white/10 bg-transparent px-2 py-1"
-                                    defaultValue={primaryWorkplace?.id || ""}
+                                    defaultValue={active?.workplace_id ?? primaryWorkplace?.id ?? ""}
                                   >
                                     <option value="">Select workplace</option>
                                     {assignments.map((workplace) => (
@@ -622,7 +652,7 @@ const AdminDashboard = ({
                                   <input
                                     type="hidden"
                                     name="workplaceId"
-                                    value={primaryWorkplace?.id || ""}
+                                    value={activeWorkplaceId}
                                   />
                                   <input
                                     type="hidden"
@@ -633,7 +663,7 @@ const AdminDashboard = ({
                                     type="submit"
                                     variant="ghost"
                                     size="sm"
-                                    disabled={!primaryWorkplace}
+                                    disabled={!active}
                                   >
                                     Clock out
                                   </Button>
@@ -686,19 +716,37 @@ const AdminDashboard = ({
                           <span>{Number(workplace.longitude).toFixed(5)}</span>
                         </div>
                       </div>
-                      <form
-                        action={deleteWorkplaceAction}
-                        className="justify-self-end"
-                      >
-                        <input type="hidden" name="id" value={workplace.id} />
-                        <Button
-                          type="submit"
-                          variant="ghost"
-                          className="text-xs text-destructive hover:text-destructive"
-                        >
-                          Delete
-                        </Button>
-                      </form>
+                      <div className="flex items-center justify-end gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              Edit
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="bg-black/90 border-white/10 text-foreground">
+                            <DialogHeader>
+                              <DialogTitle>Edit workplace</DialogTitle>
+                              <DialogDescription>
+                                Update geofence details for {workplace.name}.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <WorkplaceForm
+                              workplace={workplace}
+                              submitLabel="Save changes"
+                            />
+                          </DialogContent>
+                        </Dialog>
+                        <form action={deleteWorkplaceAction}>
+                          <input type="hidden" name="id" value={workplace.id} />
+                          <Button
+                            type="submit"
+                            variant="ghost"
+                            className="text-xs text-destructive hover:text-destructive"
+                          >
+                            Delete
+                          </Button>
+                        </form>
+                      </div>
                     </div>
                   ))
                 ) : (
@@ -720,7 +768,7 @@ const AdminDashboard = ({
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form action={createWorkerAction} className="grid gap-3">
+                  <form ref={createWorkerFormRef} action={dispatch} className="grid gap-3">
                     <Input name="fullName" placeholder="Full name" required />
                     <Input
                       name="email"
@@ -786,6 +834,17 @@ const AdminDashboard = ({
             </section>
           </TabsContent>
         </Tabs>
+
+        <Toast
+          open={showNotification && Boolean(formState.message)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowNotification(false);
+            }
+          }}
+          message={formState.message ?? ""}
+          variant={formState.status === "error" ? "error" : "success"}
+        />
       </main>
     </div>
   );

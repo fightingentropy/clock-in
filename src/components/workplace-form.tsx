@@ -1,18 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MapPin, Loader2 } from "lucide-react";
 
 import { upsertWorkplaceAction } from "@/server/actions/admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import type { Workplace } from "@/lib/types";
 
-export default function WorkplaceForm() {
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
+interface WorkplaceFormProps {
+  workplace?: Workplace;
+  submitLabel?: string;
+}
+
+export default function WorkplaceForm({ workplace, submitLabel }: WorkplaceFormProps) {
+  const [latitude, setLatitude] = useState(() => (workplace ? String(workplace.latitude) : ""));
+  const [longitude, setLongitude] = useState(() => (workplace ? String(workplace.longitude) : ""));
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (workplace) {
+      setLatitude(String(workplace.latitude));
+      setLongitude(String(workplace.longitude));
+    }
+  }, [workplace]);
 
   const handleGetCurrentLocation = () => {
     setLocationError(null);
@@ -57,11 +70,13 @@ export default function WorkplaceForm() {
 
   return (
     <form action={upsertWorkplaceAction} className="grid gap-3">
-      <Input name="name" placeholder="Name" required />
+      {workplace ? <input type="hidden" name="id" value={workplace.id} /> : null}
+      <Input name="name" placeholder="Name" defaultValue={workplace?.name ?? ""} required />
       <Textarea
         name="description"
         placeholder="Description (optional)"
         rows={3}
+        defaultValue={workplace?.description ?? ""}
       />
 
       <div className="space-y-2">
@@ -121,13 +136,13 @@ export default function WorkplaceForm() {
         name="radius_m"
         type="number"
         min={10}
-        defaultValue={50}
+        defaultValue={workplace?.radius_m ?? 50}
         placeholder="Radius meters"
         required
       />
 
       <Button type="submit" className="mt-2">
-        Save workplace
+        {submitLabel ?? (workplace ? "Save changes" : "Save workplace")}
       </Button>
     </form>
   );

@@ -175,10 +175,10 @@ const WorkerDashboard = ({
                           {entry.workplaces?.name ?? "-"}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {clockIn.toLocaleString()}
+                          {clockIn.toISOString()}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {clockOut ? clockOut.toLocaleString() : "Active"}
+                          {clockOut ? clockOut.toISOString() : "Active"}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {duration}
