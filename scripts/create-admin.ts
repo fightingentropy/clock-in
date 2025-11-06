@@ -1,6 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { Database } from "bun:sqlite";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,8 +11,8 @@ const loadEnv = () => {
   const envPath = join(__dirname, "..", ".env.local");
 
   if (!existsSync(envPath)) {
-    console.error("❌ Error: .env.local file not found");
-    process.exit(1);
+    console.warn("⚠️  Warning: .env.local file not found, using default environment values");
+    return;
   }
 
   const envContent = readFileSync(envPath, "utf8");
@@ -44,144 +45,75 @@ const loadEnv = () => {
   }
 };
 
+const resolveDatabasePath = () => {
+  const configuredPath = process.env.DATABASE_PATH?.trim();
+  if (configuredPath && configuredPath.length > 0) {
+    return isAbsolute(configuredPath)
+      ? configuredPath
+      : join(process.cwd(), configuredPath);
+  }
+  return join(__dirname, "..", "sqlite", "clock-in.sqlite");
+};
+
 const createAdmin = async () => {
   loadEnv();
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const databasePath = resolveDatabasePath();
+  const databaseDir = dirname(databasePath);
 
-  if (!supabaseUrl || !supabaseServiceKey) {
-    console.error(
-      "❌ Error: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not found in environment variables",
-    );
-    process.exit(1);
+  if (!existsSync(databaseDir)) {
+    mkdirSync(databaseDir, { recursive: true });
   }
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+  const adminEmail = process.env.ADMIN_EMAIL ?? "admin@clockin.local";
+  const adminPassword = process.env.ADMIN_PASSWORD ?? "admin123";
+  const fullName = process.env.ADMIN_FULL_NAME ?? "Admin User";
 
-  const adminEmail = "erlin.hx@gmail.com";
-  const adminPassword = "erlin123";
+  console.log("📦 Using SQLite database at:", databasePath);
+  console.log("🔐 Setting up admin account for:", adminEmail);
 
-  console.log("🔍 Checking if admin user exists...");
+  const db = new Database(databasePath);
+  db.exec("PRAGMA foreign_keys = ON;");
 
   try {
-    const { data: existingUsers, error: listError } =
-      await supabase.auth.admin.listUsers();
+    const now = new Date().toISOString();
+    const passwordHash = await Bun.password.hash(adminPassword);
 
-    if (listError) {
-      throw listError;
-    }
+    const existing = db
+      .query<{ user_id: string }>(
+        "SELECT user_id FROM user_profiles WHERE email = ? LIMIT 1",
+      )
+      .get(adminEmail);
 
-    const existingUser = existingUsers.users.find(
-      (user) => user.email === adminEmail,
-    );
-
-    let userId: string;
-
-    if (existingUser) {
-      console.log("👤 User already exists, updating password...");
-      userId = existingUser.id;
-
-      const { error: updateError } = await supabase.auth.admin.updateUserById(
-        userId,
-        {
-          password: adminPassword,
-          user_metadata: {
-            role: "admin",
-          },
-        },
-      );
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      console.log("✅ Password updated successfully");
+    if (existing) {
+      console.log("👤 Admin user already exists, updating credentials...");
+      db.query(
+        "UPDATE user_profiles SET password_hash = ?, role = 'admin', full_name = COALESCE(full_name, ?), updated_at = ? WHERE user_id = ?",
+      ).run(passwordHash, fullName, now, existing.user_id);
+      console.log("✅ Admin password refreshed and role enforced.");
     } else {
-      console.log("➕ Creating new admin user...");
-
-      const { data: newUser, error: createError } =
-        await supabase.auth.admin.createUser({
-          email: adminEmail,
-          password: adminPassword,
-          email_confirm: true,
-          user_metadata: {
-            role: "admin",
-            full_name: "Admin User",
-          },
-        });
-
-      if (createError || !newUser?.user) {
-        throw createError ?? new Error("Failed to create admin user");
-      }
-
-      userId = newUser.user.id;
-      console.log("✅ Admin user created successfully");
-    }
-
-    console.log("🔍 Checking user profile...");
-    const { data: profile, error: profileError } = await supabase
-      .from("user_profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (profileError) {
-      throw profileError;
-    }
-
-    if (profile) {
-      console.log("📝 Updating profile to admin role...");
-      const { error: updateProfileError } = await supabase
-        .from("user_profiles")
-        .update({
-          role: "admin",
-          email: adminEmail,
-        })
-        .eq("user_id", userId);
-
-      if (updateProfileError) {
-        throw updateProfileError;
-      }
-
-      console.log("✅ Profile updated to admin role");
-    } else {
-      console.log("➕ Creating admin profile...");
-      const { error: insertProfileError } = await supabase
-        .from("user_profiles")
-        .insert({
-          user_id: userId,
-          email: adminEmail,
-          full_name: "Admin User",
-          role: "admin",
-        });
-
-      if (insertProfileError) {
-        throw insertProfileError;
-      }
-
-      console.log("✅ Admin profile created");
+      console.log("➕ Creating new admin profile...");
+      const userId = randomUUID();
+      db.query(
+        "INSERT INTO user_profiles (user_id, email, password_hash, full_name, role, metadata, created_at, updated_at) VALUES (?, ?, ?, ?, 'admin', '{}', ?, ?)",
+      ).run(userId, adminEmail, passwordHash, fullName, now, now);
+      console.log("✅ Admin profile created successfully.");
     }
 
     console.log("");
     console.log("🎉 Admin user setup complete!");
-    console.log("");
     console.log("Login credentials:");
     console.log("  Email:", adminEmail);
     console.log("  Password:", adminPassword);
     console.log("");
-    console.log("You can now log in to your Clock In Portal!");
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown error occurred";
     console.error("❌ Error setting up admin:", message);
     console.error(error);
     process.exit(1);
+  } finally {
+    db.close();
   }
 };
 

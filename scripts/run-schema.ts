@@ -1,6 +1,6 @@
-import { SQL } from "bun";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { Database } from "bun:sqlite";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,8 +10,8 @@ const loadEnv = () => {
   const envPath = join(__dirname, "..", ".env.local");
 
   if (!existsSync(envPath)) {
-    console.error("❌ Error: .env.local file not found");
-    process.exit(1);
+    console.warn("⚠️  Warning: .env.local file not found, using default environment values");
+    return;
   }
 
   const envContent = readFileSync(envPath, "utf8");
@@ -44,108 +44,64 @@ const loadEnv = () => {
   }
 };
 
-const runSchema = async () => {
+const resolveDatabasePath = () => {
+  const configuredPath = process.env.DATABASE_PATH?.trim();
+  if (configuredPath && configuredPath.length > 0) {
+    return isAbsolute(configuredPath)
+      ? configuredPath
+      : join(process.cwd(), configuredPath);
+  }
+  return join(__dirname, "..", "sqlite", "clock-in.sqlite");
+};
+
+const runSchema = () => {
   loadEnv();
 
-  const connectionString =
-    process.env.POSTGRES_URL_NON_POOLING ?? process.env.POSTGRES_URL;
-
-  if (!connectionString) {
-    console.error(
-      "❌ Error: POSTGRES_URL_NON_POOLING or POSTGRES_URL not found in environment variables",
-    );
+  const schemaPath = join(__dirname, "..", "sqlite", "schema.sql");
+  if (!existsSync(schemaPath)) {
+    console.error("❌ Error: Schema file not found at", schemaPath);
     process.exit(1);
   }
 
+  const databasePath = resolveDatabasePath();
+  const databaseDir = dirname(databasePath);
+
+  if (!existsSync(databaseDir)) {
+    mkdirSync(databaseDir, { recursive: true });
+  }
+
+  console.log("📦 Using SQLite database at:", databasePath);
+  console.log("📖 Reading schema file from:", schemaPath);
+
+  const schema = readFileSync(schemaPath, "utf8");
+  const statements = schema
+    .split(/;\s*(?:\n|$)/)
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
+
+  const db = new Database(databasePath);
+
   try {
-    const schemaPath = join(__dirname, "..", "supabase", "schema.sql");
-    console.log("📖 Reading schema file from:", schemaPath);
+    db.exec("PRAGMA foreign_keys = ON;");
 
-    const schema = readFileSync(schemaPath, "utf8");
-
-    console.log("🚀 Executing schema...");
-
-    const statements: string[] = [];
-    let currentStatement = "";
-    let inDollarQuote = false;
-    let dollarQuoteTag = "";
-
-    const lines = schema.split("\n");
-
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-
-      if (!currentStatement && (!trimmedLine || trimmedLine.startsWith("--"))) {
-        continue;
+    const applySchema = db.transaction(() => {
+      for (const statement of statements) {
+        db.exec(`${statement};`);
       }
+    });
 
-      currentStatement += `${line}\n`;
+    applySchema();
 
-      const dollarMatches = line.match(/\$([a-zA-Z_]*)\$/g);
-      if (dollarMatches) {
-        for (const match of dollarMatches) {
-          if (!inDollarQuote) {
-            inDollarQuote = true;
-            dollarQuoteTag = match;
-          } else if (match === dollarQuoteTag) {
-            inDollarQuote = false;
-            dollarQuoteTag = "";
-          }
-        }
-      }
-
-      if (!inDollarQuote && trimmedLine.endsWith(";")) {
-        statements.push(currentStatement.trim());
-        currentStatement = "";
-      }
-    }
-
-    if (currentStatement.trim()) {
-      statements.push(currentStatement.trim());
-    }
-
-    console.log(`📝 Found ${statements.length} SQL statements to execute`);
-
-    const sql = new SQL(connectionString);
-
-    try {
-      for (let index = 0; index < statements.length; index += 1) {
-        const statement = statements[index];
-        try {
-          await sql.unsafe(statement);
-          console.log(`✅ Executed statement ${index + 1}/${statements.length}`);
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Unknown error";
-          console.error(`❌ Error in statement ${index + 1}:`, message);
-          console.error(
-            "Statement preview:",
-            `${statement.substring(0, 150)}...`,
-          );
-          throw error;
-        }
-      }
-    } finally {
-      await sql.close();
-    }
-
-    console.log("✅ Schema executed successfully!");
-    console.log("");
-    console.log("Your database is now set up with:");
-    console.log("  - user_profiles table");
-    console.log("  - workplaces table");
-    console.log("  - worker_assignments table");
-    console.log("  - time_entries table");
-    console.log("");
-    console.log(
-      "You can now restart your Next.js app and the redirect loop should be fixed!",
-    );
+    console.log(`✅ Applied ${statements.length} statements successfully.`);
+    console.log("🎉 SQLite database is ready to use!");
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown error occurred";
     console.error("❌ Error executing schema:", message);
     console.error(error);
     process.exit(1);
+  } finally {
+    db.close();
   }
 };
 

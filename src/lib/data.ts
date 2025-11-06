@@ -1,7 +1,12 @@
 import { subDays } from "date-fns";
 
-import type { TimeEntryWithRelations, UserProfile, WorkerWithAssignments, Workplace } from "@/lib/types";
-import { getSupabaseAdmin } from "./supabase";
+import { getDb } from "./db";
+import type {
+  TimeEntryWithRelations,
+  UserProfile,
+  WorkerWithAssignments,
+  Workplace,
+} from "@/lib/types";
 
 type OpenEntry = {
   worker_id: string;
@@ -9,18 +14,54 @@ type OpenEntry = {
   clock_in_at: string;
 };
 
-type AssignmentRow = {
+type UserProfileRow = {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  phone: string | null;
+  role: "admin" | "worker";
+  avatar_url: string | null;
+  metadata: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type AssignmentJoinedRow = {
   id: string;
   assigned_at: string;
   workplace_id: string;
-  workplaces: Workplace | null;
+  worker_id: string;
+  w_id: string | null;
+  w_name: string | null;
+  w_description: string | null;
+  w_latitude: number | null;
+  w_longitude: number | null;
+  w_radius_m: number | null;
+  w_created_at: string | null;
+  w_updated_at: string | null;
 };
 
-type RecentRow = TimeEntryWithRelations;
-
-type WorkerRow = WorkerWithAssignments;
-
-type ProfileRow = UserProfile;
+type TimeEntryJoinedRow = {
+  id: string;
+  worker_id: string;
+  workplace_id: string | null;
+  clock_in_at: string;
+  clock_out_at: string | null;
+  created_by: string | null;
+  method: string;
+  notes: string | null;
+  created_at: string;
+  w_id: string | null;
+  w_name: string | null;
+  w_description: string | null;
+  w_latitude: number | null;
+  w_longitude: number | null;
+  w_radius_m: number | null;
+  w_created_at: string | null;
+  w_updated_at: string | null;
+  worker_full_name: string | null;
+  worker_email: string | null;
+};
 
 export type WorkerDetailStats = {
   totalHoursPastWeek: number;
@@ -31,134 +72,351 @@ export type WorkerDetailStats = {
 };
 
 export type WorkerDetailData = {
-  profile: ProfileRow | null;
-  assignments: AssignmentRow[];
+  profile: UserProfile | null;
+  assignments: Array<{
+    id: string;
+    assigned_at: string;
+    workplace_id: string;
+    workplaces: Workplace | null;
+  }>;
   workplaces: Workplace[];
   timeEntries: TimeEntryWithRelations[];
   activeEntry: TimeEntryWithRelations | null;
   stats: WorkerDetailStats;
 };
 
-export const fetchWorkerData = async (userId: string) => {
-  const supabase = getSupabaseAdmin();
+const parseMetadata = (value: string | null): Record<string, unknown> | null => {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "object" && parsed ? (parsed as Record<string, unknown>) : null;
+  } catch (error) {
+    console.warn("⚠️  Failed to parse metadata JSON", error);
+    return null;
+  }
+};
 
-  const [profileRes, assignmentsRes, openEntryRes, recentRes] = await Promise.all([
-    supabase.from("user_profiles").select("*").eq("user_id", userId).maybeSingle<ProfileRow>(),
-    supabase
-      .from("worker_assignments")
-      .select("id, assigned_at, workplace_id, workplaces(*)")
-      .eq("worker_id", userId)
-      .returns<AssignmentRow[]>(),
-    supabase
-      .from("time_entries")
-      .select(
-        "id, worker_id, workplace_id, clock_in_at, clock_out_at, created_by, method, notes, created_at, workplaces(name), worker:worker_id(full_name, email)",
-      )
-      .eq("worker_id", userId)
-      .is("clock_out_at", null)
-      .order("clock_in_at", { ascending: false })
-      .limit(1)
-      .maybeSingle<TimeEntryWithRelations>(),
-    supabase
-      .from("time_entries")
-      .select(
-        "id, workplace_id, clock_in_at, clock_out_at, method, workplaces(name), worker:worker_id(full_name, email)",
-      )
-      .eq("worker_id", userId)
-      .order("clock_in_at", { ascending: false })
-      .limit(20)
-      .returns<RecentRow[]>(),
-  ]);
-
-  if (profileRes.error) throw new Error(profileRes.error.message);
-  if (assignmentsRes.error) throw new Error(assignmentsRes.error.message);
-  if (recentRes.error) throw new Error(recentRes.error.message);
-  if (openEntryRes.error) throw new Error(openEntryRes.error.message);
-
-  const workplaces = (assignmentsRes.data ?? []).map((assignment) => assignment.workplaces).filter(Boolean) as Workplace[];
+const mapWorkplace = (row: AssignmentJoinedRow | TimeEntryJoinedRow): Workplace | null => {
+  if (!row.w_id) {
+    return null;
+  }
 
   return {
-    profile: profileRes.data ?? null,
-    assignments: assignmentsRes.data ?? [],
+    id: row.w_id,
+    name: row.w_name ?? "",
+    description: row.w_description ?? null,
+    latitude: Number(row.w_latitude ?? 0),
+    longitude: Number(row.w_longitude ?? 0),
+    radius_m: Number(row.w_radius_m ?? 50),
+    created_at: row.w_created_at ?? "",
+    updated_at: row.w_updated_at ?? "",
+  };
+};
+
+const mapUserProfile = (row: UserProfileRow): UserProfile => ({
+  user_id: row.user_id,
+  email: row.email,
+  full_name: row.full_name,
+  phone: row.phone,
+  role: row.role,
+  avatar_url: row.avatar_url,
+  metadata: parseMetadata(row.metadata),
+  created_at: row.created_at,
+  updated_at: row.updated_at,
+});
+
+const mapAssignmentRow = (row: AssignmentJoinedRow) => ({
+  id: row.id,
+  assigned_at: row.assigned_at,
+  workplace_id: row.workplace_id,
+  workplaces: mapWorkplace(row),
+});
+
+const mapTimeEntryRow = (row: TimeEntryJoinedRow): TimeEntryWithRelations => ({
+  id: row.id,
+  worker_id: row.worker_id,
+  workplace_id: row.workplace_id,
+  clock_in_at: row.clock_in_at,
+  clock_out_at: row.clock_out_at,
+  created_by: row.created_by,
+  method: row.method,
+  notes: row.notes,
+  created_at: row.created_at,
+  workplaces: mapWorkplace(row),
+  worker:
+    row.worker_full_name || row.worker_email
+      ? {
+          full_name: row.worker_full_name,
+          email: row.worker_email ?? "",
+        }
+      : null,
+});
+
+export const fetchWorkerData = async (userId: string) => {
+  const db = getDb();
+
+  const profileRow = db
+    .query<UserProfileRow>(
+      "SELECT user_id, email, full_name, phone, role, avatar_url, metadata, created_at, updated_at FROM user_profiles WHERE user_id = ? LIMIT 1",
+    )
+    .get(userId);
+
+  const assignments = db
+    .query<AssignmentJoinedRow>(
+      `SELECT
+        wa.id,
+        wa.assigned_at,
+        wa.workplace_id,
+        wa.worker_id,
+        w.id AS w_id,
+        w.name AS w_name,
+        w.description AS w_description,
+        w.latitude AS w_latitude,
+        w.longitude AS w_longitude,
+        w.radius_m AS w_radius_m,
+        w.created_at AS w_created_at,
+        w.updated_at AS w_updated_at
+      FROM worker_assignments wa
+      LEFT JOIN workplaces w ON wa.workplace_id = w.id
+      WHERE wa.worker_id = ?
+      ORDER BY wa.assigned_at ASC`,
+    )
+    .all(userId)
+    .map(mapAssignmentRow);
+
+  const activeEntryRow = db
+    .query<TimeEntryJoinedRow>(
+      `SELECT
+        te.id,
+        te.worker_id,
+        te.workplace_id,
+        te.clock_in_at,
+        te.clock_out_at,
+        te.created_by,
+        te.method,
+        te.notes,
+        te.created_at,
+        w.id AS w_id,
+        w.name AS w_name,
+        w.description AS w_description,
+        w.latitude AS w_latitude,
+        w.longitude AS w_longitude,
+        w.radius_m AS w_radius_m,
+        w.created_at AS w_created_at,
+        w.updated_at AS w_updated_at,
+        u.full_name AS worker_full_name,
+        u.email AS worker_email
+      FROM time_entries te
+      LEFT JOIN workplaces w ON te.workplace_id = w.id
+      LEFT JOIN user_profiles u ON te.worker_id = u.user_id
+      WHERE te.worker_id = ? AND te.clock_out_at IS NULL
+      ORDER BY te.clock_in_at DESC
+      LIMIT 1`,
+    )
+    .get(userId);
+
+  const recentEntries = db
+    .query<TimeEntryJoinedRow>(
+      `SELECT
+        te.id,
+        te.worker_id,
+        te.workplace_id,
+        te.clock_in_at,
+        te.clock_out_at,
+        te.created_by,
+        te.method,
+        te.notes,
+        te.created_at,
+        w.id AS w_id,
+        w.name AS w_name,
+        w.description AS w_description,
+        w.latitude AS w_latitude,
+        w.longitude AS w_longitude,
+        w.radius_m AS w_radius_m,
+        w.created_at AS w_created_at,
+        w.updated_at AS w_updated_at,
+        u.full_name AS worker_full_name,
+        u.email AS worker_email
+      FROM time_entries te
+      LEFT JOIN workplaces w ON te.workplace_id = w.id
+      LEFT JOIN user_profiles u ON te.worker_id = u.user_id
+      WHERE te.worker_id = ?
+      ORDER BY te.clock_in_at DESC
+      LIMIT 20`,
+    )
+    .all(userId)
+    .map(mapTimeEntryRow);
+
+  const workplaces = assignments
+    .map((assignment) => assignment.workplaces)
+    .filter((item): item is Workplace => Boolean(item));
+
+  return {
+    profile: profileRow ? mapUserProfile(profileRow) : null,
+    assignments,
     workplaces,
-    activeEntry: openEntryRes.data ?? null,
-    recentEntries: recentRes.data ?? [],
+    activeEntry: activeEntryRow ? mapTimeEntryRow(activeEntryRow) : null,
+    recentEntries,
   };
 };
 
 export const fetchAdminData = async () => {
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
 
-  const [workersRes, workplacesRes, openEntriesRes, recentRes] = await Promise.all([
-    supabase
-      .from("user_profiles")
-      .select("*, worker_assignments(id, workplace_id, workplaces(*))")
-      .order("created_at", { ascending: true })
-      .returns<WorkerRow[]>(),
-    supabase.from("workplaces").select("*").order("name").returns<Workplace[]>(),
-    supabase
-      .from("time_entries")
-      .select("worker_id, workplace_id, clock_in_at")
-      .is("clock_out_at", null)
-      .returns<OpenEntry[]>(),
-    supabase
-      .from("time_entries")
-      .select(
-        "id, worker_id, workplace_id, clock_in_at, clock_out_at, method, workplaces(name), worker:worker_id(full_name, email)",
-      )
-      .order("clock_in_at", { ascending: false })
-      .limit(25)
-      .returns<RecentRow[]>(),
-  ]);
+  const workerRows = db
+    .query<UserProfileRow>(
+      "SELECT user_id, email, full_name, phone, role, avatar_url, metadata, created_at, updated_at FROM user_profiles ORDER BY created_at ASC",
+    )
+    .all();
 
-  if (workersRes.error) throw new Error(workersRes.error.message);
-  if (workplacesRes.error) throw new Error(workplacesRes.error.message);
-  if (openEntriesRes.error) throw new Error(openEntriesRes.error.message);
-  if (recentRes.error) throw new Error(recentRes.error.message);
+  const assignmentRows = db
+    .query<AssignmentJoinedRow>(
+      `SELECT
+        wa.id,
+        wa.worker_id,
+        wa.workplace_id,
+        wa.assigned_at,
+        w.id AS w_id,
+        w.name AS w_name,
+        w.description AS w_description,
+        w.latitude AS w_latitude,
+        w.longitude AS w_longitude,
+        w.radius_m AS w_radius_m,
+        w.created_at AS w_created_at,
+        w.updated_at AS w_updated_at
+      FROM worker_assignments wa
+      LEFT JOIN workplaces w ON wa.workplace_id = w.id`,
+    )
+    .all();
+
+  const assignmentsByWorker = new Map<string, WorkerWithAssignments["worker_assignments"]>();
+
+  for (const row of assignmentRows) {
+    const collection = assignmentsByWorker.get(row.worker_id) ?? [];
+    collection.push({ workplaces: mapWorkplace(row) });
+    assignmentsByWorker.set(row.worker_id, collection);
+  }
+
+  const workers = workerRows.map((row) => ({
+    ...mapUserProfile(row),
+    worker_assignments: assignmentsByWorker.get(row.user_id) ?? [],
+  }));
+
+  const workplaces = db
+    .query<Workplace>(
+      "SELECT id, name, description, latitude, longitude, radius_m, created_at, updated_at FROM workplaces ORDER BY name ASC",
+    )
+    .all();
+
+  const openEntries = db
+    .query<OpenEntry>(
+      "SELECT worker_id, workplace_id, clock_in_at FROM time_entries WHERE clock_out_at IS NULL",
+    )
+    .all();
+
+  const recentEntries = db
+    .query<TimeEntryJoinedRow>(
+      `SELECT
+        te.id,
+        te.worker_id,
+        te.workplace_id,
+        te.clock_in_at,
+        te.clock_out_at,
+        te.created_by,
+        te.method,
+        te.notes,
+        te.created_at,
+        w.id AS w_id,
+        w.name AS w_name,
+        w.description AS w_description,
+        w.latitude AS w_latitude,
+        w.longitude AS w_longitude,
+        w.radius_m AS w_radius_m,
+        w.created_at AS w_created_at,
+        w.updated_at AS w_updated_at,
+        u.full_name AS worker_full_name,
+        u.email AS worker_email
+      FROM time_entries te
+      LEFT JOIN workplaces w ON te.workplace_id = w.id
+      LEFT JOIN user_profiles u ON te.worker_id = u.user_id
+      ORDER BY te.clock_in_at DESC
+      LIMIT 25`,
+    )
+    .all()
+    .map(mapTimeEntryRow);
 
   return {
-    workers: workersRes.data ?? [],
-    workplaces: workplacesRes.data ?? [],
-    openEntries: openEntriesRes.data ?? [],
-    recentEntries: recentRes.data ?? [],
+    workers,
+    workplaces,
+    openEntries,
+    recentEntries,
   };
 };
 
 export const fetchWorkerDetail = async (workerId: string): Promise<WorkerDetailData> => {
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
 
-  const [profileRes, assignmentsRes, timeEntriesRes] = await Promise.all([
-    supabase
-      .from("user_profiles")
-      .select("*")
-      .eq("user_id", workerId)
-      .maybeSingle<ProfileRow>(),
-    supabase
-      .from("worker_assignments")
-      .select("id, assigned_at, workplace_id, workplaces(*)")
-      .eq("worker_id", workerId)
-      .order("assigned_at", { ascending: true })
-      .returns<AssignmentRow[]>(),
-    supabase
-      .from("time_entries")
-      .select(
-        "id, worker_id, workplace_id, clock_in_at, clock_out_at, created_by, method, notes, created_at, workplaces(*), worker:worker_id(full_name, email)",
-      )
-      .eq("worker_id", workerId)
-      .order("clock_in_at", { ascending: false })
-      .returns<TimeEntryWithRelations[]>(),
-  ]);
+  const profileRow = db
+    .query<UserProfileRow>(
+      "SELECT user_id, email, full_name, phone, role, avatar_url, metadata, created_at, updated_at FROM user_profiles WHERE user_id = ? LIMIT 1",
+    )
+    .get(workerId);
 
-  if (profileRes.error) throw new Error(profileRes.error.message);
-  if (assignmentsRes.error) throw new Error(assignmentsRes.error.message);
-  if (timeEntriesRes.error) throw new Error(timeEntriesRes.error.message);
+  const assignments = db
+    .query<AssignmentJoinedRow>(
+      `SELECT
+        wa.id,
+        wa.assigned_at,
+        wa.workplace_id,
+        wa.worker_id,
+        w.id AS w_id,
+        w.name AS w_name,
+        w.description AS w_description,
+        w.latitude AS w_latitude,
+        w.longitude AS w_longitude,
+        w.radius_m AS w_radius_m,
+        w.created_at AS w_created_at,
+        w.updated_at AS w_updated_at
+      FROM worker_assignments wa
+      LEFT JOIN workplaces w ON wa.workplace_id = w.id
+      WHERE wa.worker_id = ?
+      ORDER BY wa.assigned_at ASC`,
+    )
+    .all(workerId)
+    .map(mapAssignmentRow);
 
-  const profile = profileRes.data ?? null;
-  const assignments = assignmentsRes.data ?? [];
-  const workplaces = assignments
-    .map((assignment) => assignment.workplaces)
-    .filter((item): item is Workplace => Boolean(item));
-  const timeEntries = timeEntriesRes.data ?? [];
+  const timeEntries = db
+    .query<TimeEntryJoinedRow>(
+      `SELECT
+        te.id,
+        te.worker_id,
+        te.workplace_id,
+        te.clock_in_at,
+        te.clock_out_at,
+        te.created_by,
+        te.method,
+        te.notes,
+        te.created_at,
+        w.id AS w_id,
+        w.name AS w_name,
+        w.description AS w_description,
+        w.latitude AS w_latitude,
+        w.longitude AS w_longitude,
+        w.radius_m AS w_radius_m,
+        w.created_at AS w_created_at,
+        w.updated_at AS w_updated_at,
+        u.full_name AS worker_full_name,
+        u.email AS worker_email
+      FROM time_entries te
+      LEFT JOIN workplaces w ON te.workplace_id = w.id
+      LEFT JOIN user_profiles u ON te.worker_id = u.user_id
+      WHERE te.worker_id = ?
+      ORDER BY te.clock_in_at DESC`,
+    )
+    .all(workerId)
+    .map(mapTimeEntryRow);
 
   const activeEntry = timeEntries.find((entry) => entry.clock_out_at === null) ?? null;
 
@@ -214,9 +472,11 @@ export const fetchWorkerDetail = async (workerId: string): Promise<WorkerDetailD
     : 0;
 
   return {
-    profile,
+    profile: profileRow ? mapUserProfile(profileRow) : null,
     assignments,
-    workplaces,
+    workplaces: assignments
+      .map((assignment) => assignment.workplaces)
+      .filter((item): item is Workplace => Boolean(item)),
     timeEntries,
     activeEntry,
     stats: {

@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "node:crypto";
+
 import { z } from "zod";
 
 import type { Workplace } from "@/lib/types";
-import { getSupabaseAdmin } from "@/lib/supabase";
+import { getDb, nowIso } from "@/lib/db";
 import { requireProfile } from "@/lib/session";
 import { distanceInMeters } from "@/lib/geo";
 
@@ -15,23 +17,36 @@ const coordinateSchema = z.object({
 
 type AssignmentRow = {
   workplace_id: string;
-  workplaces: Workplace | null;
+  name: string;
+  description: string | null;
+  latitude: number;
+  longitude: number;
+  radius_m: number;
+  created_at: string;
+  updated_at: string;
 };
 
 export const workerClockIn = async (values: z.infer<typeof coordinateSchema>) => {
   const { profile } = await requireProfile();
   const input = coordinateSchema.parse(values);
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
 
-  const { data: assignments, error: assignmentsError } = await supabase
-    .from("worker_assignments")
-    .select("workplace_id, workplaces(*)")
-    .eq("worker_id", profile.user_id)
-    .returns<AssignmentRow[]>();
-
-  if (assignmentsError) {
-    throw new Error(assignmentsError.message);
-  }
+  const assignments = db
+    .query<AssignmentRow>(
+      `SELECT
+        wa.workplace_id,
+        w.name,
+        w.description,
+        w.latitude,
+        w.longitude,
+        w.radius_m,
+        w.created_at,
+        w.updated_at
+      FROM worker_assignments wa
+      JOIN workplaces w ON wa.workplace_id = w.id
+      WHERE wa.worker_id = ?`,
+    )
+    .all(profile.user_id);
 
   if (!assignments || assignments.length === 0) {
     throw new Error("No assigned workplaces");
@@ -39,20 +54,18 @@ export const workerClockIn = async (values: z.infer<typeof coordinateSchema>) =>
 
   const matched = assignments
     .map((assignment) => {
-      const workplace = assignment.workplaces;
-      if (!workplace) return null;
       const distance = distanceInMeters(
-        Number(workplace.latitude),
-        Number(workplace.longitude),
+        Number(assignment.latitude),
+        Number(assignment.longitude),
         input.latitude,
         input.longitude,
       );
       return {
-        workplace,
+        workplace: assignment,
         distance,
       };
     })
-    .filter((entry): entry is { workplace: Workplace; distance: number } => {
+    .filter((entry): entry is { workplace: AssignmentRow; distance: number } => {
       if (!entry) return false;
       const radius = Number(entry.workplace.radius_m ?? 50);
       return entry.distance <= radius;
@@ -63,71 +76,62 @@ export const workerClockIn = async (values: z.infer<typeof coordinateSchema>) =>
     throw new Error("You are outside of your workplace radius");
   }
 
-  const { data: activeEntry, error: activeError } = await supabase
-    .from("time_entries")
-    .select("id")
-    .eq("worker_id", profile.user_id)
-    .is("clock_out_at", null)
-    .order("clock_in_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<{ id: string }>();
-
-  if (activeError) {
-    throw new Error(activeError.message);
-  }
+  const activeEntry = db
+    .query<{ id: string }>(
+      "SELECT id FROM time_entries WHERE worker_id = ? AND clock_out_at IS NULL ORDER BY clock_in_at DESC LIMIT 1",
+    )
+    .get(profile.user_id);
 
   if (activeEntry) {
     throw new Error("You are already clocked in");
   }
 
-  const { error } = await supabase.from("time_entries").insert({
-    worker_id: profile.user_id,
-    workplace_id: matched.workplace.id,
-    clock_in_at: new Date().toISOString(),
-    method: "self",
-    created_by: profile.user_id,
-  });
+  const timestamp = nowIso();
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  db.query(
+    "INSERT INTO time_entries (id, worker_id, workplace_id, clock_in_at, method, created_by, created_at) VALUES (?, ?, ?, ?, 'self', ?, ?)",
+  ).run(
+    randomUUID(),
+    profile.user_id,
+    matched.workplace.workplace_id,
+    timestamp,
+    profile.user_id,
+    timestamp,
+  );
 
   revalidatePath("/dashboard");
-  return { success: true, workplace: matched.workplace };
+  return {
+    success: true,
+    workplace: {
+      id: matched.workplace.workplace_id,
+      name: matched.workplace.name,
+      description: matched.workplace.description,
+      latitude: matched.workplace.latitude,
+      longitude: matched.workplace.longitude,
+      radius_m: matched.workplace.radius_m,
+      created_at: matched.workplace.created_at,
+      updated_at: matched.workplace.updated_at,
+    } satisfies Workplace,
+  };
 };
 
 export const workerClockOut = async () => {
   const { profile } = await requireProfile();
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
 
-  const { data: activeEntry, error: activeError } = await supabase
-    .from("time_entries")
-    .select("id")
-    .eq("worker_id", profile.user_id)
-    .is("clock_out_at", null)
-    .order("clock_in_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<{ id: string }>();
-
-  if (activeError) {
-    throw new Error(activeError.message);
-  }
+  const activeEntry = db
+    .query<{ id: string }>(
+      "SELECT id FROM time_entries WHERE worker_id = ? AND clock_out_at IS NULL ORDER BY clock_in_at DESC LIMIT 1",
+    )
+    .get(profile.user_id);
 
   if (!activeEntry) {
     throw new Error("You are not clocked in");
   }
 
-  const { error } = await supabase
-    .from("time_entries")
-    .update({
-      clock_out_at: new Date().toISOString(),
-      method: "self",
-    })
-    .eq("id", activeEntry.id);
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  db.query(
+    "UPDATE time_entries SET clock_out_at = ?, method = 'self' WHERE id = ?",
+  ).run(nowIso(), activeEntry.id);
 
   revalidatePath("/dashboard");
   return { success: true };
@@ -141,7 +145,8 @@ const updateSelfSchema = z.object({
 export const updateSelfProfile = async (values: z.infer<typeof updateSelfSchema>) => {
   const { profile } = await requireProfile();
   const input = updateSelfSchema.parse(values);
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
+  const timestamp = nowIso();
 
   const payload: Record<string, unknown> = {};
   if (input.fullName !== undefined) payload.full_name = input.fullName;
@@ -151,14 +156,12 @@ export const updateSelfProfile = async (values: z.infer<typeof updateSelfSchema>
     return { success: true };
   }
 
-  const { error } = await supabase
-    .from("user_profiles")
-    .update(payload)
-    .eq("user_id", profile.user_id);
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  const assignments = Object.entries(payload);
+  const columns = assignments.map(([key]) => `${key} = ?`).join(", ");
+  const valuesToBind = assignments.map(([, value]) => value);
+  db.query(
+    `UPDATE user_profiles SET ${columns}, updated_at = ? WHERE user_id = ?`,
+  ).run(...valuesToBind, timestamp, profile.user_id);
 
   revalidatePath("/dashboard");
   return { success: true };

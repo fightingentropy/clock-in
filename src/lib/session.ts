@@ -1,124 +1,147 @@
-import type { Session, User } from "@supabase/supabase-js";
+import { randomBytes } from "node:crypto";
 
-import { getSupabaseAdmin, getSupabaseServerComponentClient } from "./supabase";
+import { cookies } from "next/headers";
+
+import { getDb, nowIso } from "./db";
+import type { UserProfile } from "./types";
+
+export type AppSession = {
+  token: string;
+  user_id: string;
+  expires_at: string;
+};
+
+type SessionRow = {
+  token: string;
+  user_id: string;
+  expires_at: string;
+};
+
+type UserProfileRow = {
+  user_id: string;
+  email: string;
+  password_hash: string;
+  full_name: string | null;
+  phone: string | null;
+  role: "admin" | "worker";
+  avatar_url: string | null;
+  metadata: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 type AuthState = {
-  session: Session | null;
-  user: User | null;
+  session: AppSession | null;
+  profile: UserProfile | null;
+};
+
+export const SESSION_COOKIE_NAME = "clockin_session";
+export const DEFAULT_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+
+const parseMetadata = (value: string | null): Record<string, unknown> | null => {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "object" && parsed ? (parsed as Record<string, unknown>) : null;
+  } catch (error) {
+    console.warn("⚠️  Failed to parse metadata JSON", error);
+    return null;
+  }
+};
+
+const mapProfile = (row: UserProfileRow): UserProfile => ({
+  user_id: row.user_id,
+  email: row.email,
+  full_name: row.full_name,
+  phone: row.phone,
+  role: row.role,
+  avatar_url: row.avatar_url,
+  metadata: parseMetadata(row.metadata),
+  created_at: row.created_at,
+  updated_at: row.updated_at,
+});
+
+const fetchProfile = (userId: string): UserProfile | null => {
+  const db = getDb();
+  const row = db
+    .query<UserProfileRow>(
+      "SELECT user_id, email, password_hash, full_name, phone, role, avatar_url, metadata, created_at, updated_at FROM user_profiles WHERE user_id = ? LIMIT 1",
+    )
+    .get(userId);
+  return row ? mapProfile(row) : null;
+};
+
+const cleanupSession = (token: string) => {
+  const db = getDb();
+  db.query("DELETE FROM sessions WHERE token = ?").run(token);
 };
 
 const getServerAuthState = async (): Promise<AuthState> => {
-  const supabase = await getSupabaseServerComponentClient();
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
-  const sessionResult = await supabase.auth.getSession();
-
-  if (sessionResult.error) {
-    console.error("Failed to retrieve Supabase session", sessionResult.error);
+  if (!token) {
+    return { session: null, profile: null };
   }
 
-  const session = sessionResult.data?.session ?? null;
+  const db = getDb();
+  const sessionRow = db
+    .query<SessionRow>(
+      "SELECT token, user_id, expires_at FROM sessions WHERE token = ? LIMIT 1",
+    )
+    .get(token);
 
-  if (!session) {
-    return { session: null, user: null };
+  if (!sessionRow) {
+    cookieStore.delete(SESSION_COOKIE_NAME);
+    return { session: null, profile: null };
   }
 
-  try {
-    const userResult = await supabase.auth.getUser();
-
-    if (userResult.error) {
-      console.error("Failed to retrieve Supabase user", userResult.error);
-    }
-
-    return {
-      session,
-      user: userResult.data?.user ?? null,
-    };
-  } catch (error) {
-    console.error("Failed to retrieve Supabase user", error);
-    return { session, user: null };
+  const expiresAt = new Date(sessionRow.expires_at).getTime();
+  if (Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
+    cleanupSession(sessionRow.token);
+    cookieStore.delete({ name: SESSION_COOKIE_NAME, path: "/" });
+    return { session: null, profile: null };
   }
+
+  const profile = fetchProfile(sessionRow.user_id);
+
+  if (!profile) {
+    cleanupSession(sessionRow.token);
+    cookieStore.delete({ name: SESSION_COOKIE_NAME, path: "/" });
+    return { session: null, profile: null };
+  }
+
+  return {
+    session: {
+      token: sessionRow.token,
+      user_id: sessionRow.user_id,
+      expires_at: sessionRow.expires_at,
+    },
+    profile,
+  };
 };
 
-export const getServerSession = async (): Promise<Session | null> => {
-  const { session, user } = await getServerAuthState();
-  if (!user) {
-    return null;
-  }
+export const getServerSession = async (): Promise<AppSession | null> => {
+  const { session } = await getServerAuthState();
   return session;
 };
 
-export const requireSession = async (): Promise<Session> => {
-  const { session, user } = await getServerAuthState();
-  if (!session || !user) {
+export const requireSession = async (): Promise<AppSession> => {
+  const { session } = await getServerAuthState();
+  if (!session) {
     throw new Error("Unauthorized");
   }
   return session;
 };
 
 export const requireProfile = async () => {
-  const { session, user } = await getServerAuthState();
-  if (!session || !user) {
-    console.error("❌ requireProfile: No session or user found");
+  const { session, profile } = await getServerAuthState();
+  if (!session || !profile) {
     throw new Error("Unauthorized");
   }
-  console.log(
-    "✅ requireProfile: Session and user verified for user_id:",
-    user.id,
-  );
-
-  const supabase = getSupabaseAdmin();
-
-  const { data, error } = await supabase
-    .from("user_profiles")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (error) {
-    console.error(
-      "❌ requireProfile: Error fetching profile from database:",
-      error,
-    );
-    throw new Error(error.message);
-  }
-
-  if (!data) {
-    console.log(
-      "⚠️ requireProfile: No profile found, attempting to create one...",
-    );
-    const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
-    const fallbackRole = metadata.role === "admin" ? "admin" : "worker";
-    const insertPayload = {
-      user_id: user.id,
-      email: user.email,
-      full_name:
-        (metadata.full_name as string | undefined) ??
-        (metadata.name as string | undefined) ??
-        null,
-      role: fallbackRole,
-    };
-    console.log(
-      "📝 requireProfile: Creating profile with payload:",
-      insertPayload,
-    );
-    const { data: created, error: createError } = await supabase
-      .from("user_profiles")
-      .insert(insertPayload)
-      .select("*")
-      .single();
-    if (createError || !created) {
-      console.error(
-        "❌ requireProfile: Failed to create profile:",
-        createError,
-      );
-      throw new Error(createError?.message || "Unable to create profile");
-    }
-    console.log("✅ requireProfile: Profile created successfully");
-    return { session, profile: created, user };
-  }
-
-  console.log("✅ requireProfile: Profile found successfully");
-  return { session, profile: data, user };
+  return { session, profile };
 };
 
 export const requireAdmin = async () => {
@@ -127,4 +150,43 @@ export const requireAdmin = async () => {
     throw new Error("Forbidden");
   }
   return result;
+};
+
+export const createSession = (userId: string, ttlMs = DEFAULT_SESSION_TTL_MS): AppSession => {
+  const db = getDb();
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  const createdAt = nowIso();
+
+  db.query(
+    "INSERT INTO sessions (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+  ).run(token, userId, expiresAt, createdAt);
+
+  return {
+    token,
+    user_id: userId,
+    expires_at: expiresAt,
+  };
+};
+
+export const deleteSession = (token: string) => {
+  cleanupSession(token);
+};
+
+export const setSessionCookie = async (session: AppSession) => {
+  const cookieStore = await cookies();
+  cookieStore.set({
+    name: SESSION_COOKIE_NAME,
+    value: session.token,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    expires: new Date(session.expires_at),
+  });
+};
+
+export const clearSessionCookie = async () => {
+  const cookieStore = await cookies();
+  cookieStore.delete({ name: SESSION_COOKIE_NAME, path: "/" });
 };

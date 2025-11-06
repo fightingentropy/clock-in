@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 
-import { signOut } from "@/lib/auth-client";
+import { logout } from "@/server/actions/auth";
 import { Button } from "@/components/ui/button";
 
 interface SignOutButtonProps {
@@ -30,13 +30,7 @@ export default function SignOutButton({
   const handleSignOut = async () => {
     setIsLoading(true);
     try {
-      const { error } = await signOut();
-      if (error) {
-        console.error("Sign out error:", error);
-        setIsLoading(false);
-        return;
-      }
-      // Force a full page reload to clear all client-side state
+      await logout();
       window.location.href = "/";
     } catch (error) {
       console.error("Sign out failed:", error);

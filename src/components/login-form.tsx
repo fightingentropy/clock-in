@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 
-import { signInWithEmail } from "@/lib/auth-client";
+import { loginWithEmail } from "@/server/actions/auth";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -50,9 +50,9 @@ const LoginForm = () => {
   const onSubmit = (values: FormValues) => {
     setError(null);
     startTransition(async () => {
-      const { error: signInError } = await signInWithEmail(values);
-      if (signInError) {
-        setError(signInError.message || "Unable to sign in");
+      const result = await loginWithEmail(values);
+      if (!result.success) {
+        setError(result.error ?? "Unable to sign in");
         return;
       }
       router.refresh();

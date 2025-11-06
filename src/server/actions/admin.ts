@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "node:crypto";
+
 import { z } from "zod";
 
 import type { Workplace } from "@/lib/types";
-import { getSupabaseAdmin } from "@/lib/supabase";
+import { getDb, nowIso } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 export type CreateWorkerActionState = {
   status: "idle" | "success" | "error";
@@ -23,51 +25,41 @@ const createWorkerSchema = z.object({
 export const createWorker = async (values: z.infer<typeof createWorkerSchema>) => {
   await requireAdmin();
   const input = createWorkerSchema.parse(values);
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
 
-  const { data: userResult, error: userError } = await supabase.auth.admin.createUser({
-    email: input.email,
-    password: input.password,
-    email_confirm: true,
-    user_metadata: {
-      role: input.role,
-      full_name: input.fullName,
-      phone: input.phone ?? null,
-    },
+  const existing = db
+    .query<{ user_id: string }>(
+      "SELECT user_id FROM user_profiles WHERE email = ? LIMIT 1",
+    )
+    .get(input.email);
+
+  if (existing) {
+    throw new Error("User with this email already exists");
+  }
+
+  const userId = randomUUID();
+  const passwordHash = await Bun.password.hash(input.password);
+  const timestamp = nowIso();
+
+  const transaction = db.transaction(() => {
+    db.query(
+      "INSERT INTO user_profiles (user_id, email, password_hash, full_name, phone, role, metadata, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, '{}', ?, ?)",
+    ).run(userId, input.email, passwordHash, input.fullName, input.phone ?? null, input.role, timestamp, timestamp);
+
+    if (input.workplaceId) {
+      try {
+        db.query(
+          "INSERT INTO worker_assignments (id, worker_id, workplace_id, assigned_at) VALUES (?, ?, ?, ?)",
+        ).run(randomUUID(), userId, input.workplaceId, timestamp);
+      } catch (error) {
+        if (!(error instanceof Error && "code" in error && (error as { code: string }).code === "SQLITE_CONSTRAINT")) {
+          throw error;
+        }
+      }
+    }
   });
 
-  if (userError || !userResult?.user) {
-    throw new Error(userError?.message ?? "Failed to create worker");
-  }
-
-  const user = userResult.user;
-
-  const { error: profileError } = await supabase.from("user_profiles").upsert(
-    {
-      user_id: user.id,
-      email: input.email,
-      full_name: input.fullName,
-      phone: input.phone ?? null,
-      role: input.role,
-    },
-    {
-      onConflict: "user_id",
-    },
-  );
-
-  if (profileError) {
-    throw new Error(profileError.message);
-  }
-
-  if (input.workplaceId) {
-    const { error: assignmentError } = await supabase.from("worker_assignments").insert({
-      worker_id: user.id,
-      workplace_id: input.workplaceId,
-    });
-    if (assignmentError && assignmentError.code !== "23505") {
-      throw new Error(assignmentError.message);
-    }
-  }
+  transaction();
 
   revalidatePath("/dashboard");
   return { success: true };
@@ -85,7 +77,8 @@ const upsertWorkplaceSchema = z.object({
 export const upsertWorkplace = async (values: z.infer<typeof upsertWorkplaceSchema>) => {
   await requireAdmin();
   const input = upsertWorkplaceSchema.parse(values);
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
+  const timestamp = nowIso();
 
   const payload = {
     name: input.name,
@@ -96,18 +89,30 @@ export const upsertWorkplace = async (values: z.infer<typeof upsertWorkplaceSche
   } satisfies Partial<Workplace>;
 
   if (input.id) {
-    const { error } = await supabase
-      .from("workplaces")
-      .update(payload)
-      .eq("id", input.id);
-    if (error) {
-      throw new Error(error.message);
-    }
+    db.query(
+      "UPDATE workplaces SET name = ?, description = ?, latitude = ?, longitude = ?, radius_m = ?, updated_at = ? WHERE id = ?",
+    ).run(
+      payload.name,
+      payload.description,
+      payload.latitude,
+      payload.longitude,
+      payload.radius_m,
+      timestamp,
+      input.id,
+    );
   } else {
-    const { error } = await supabase.from("workplaces").insert(payload);
-    if (error) {
-      throw new Error(error.message);
-    }
+    db.query(
+      "INSERT INTO workplaces (id, name, description, latitude, longitude, radius_m, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      randomUUID(),
+      payload.name,
+      payload.description,
+      payload.latitude,
+      payload.longitude,
+      payload.radius_m,
+      timestamp,
+      timestamp,
+    );
   }
 
   revalidatePath("/dashboard");
@@ -119,12 +124,9 @@ const deleteWorkplaceSchema = z.object({ id: z.string().uuid() });
 export const deleteWorkplace = async (values: z.infer<typeof deleteWorkplaceSchema>) => {
   await requireAdmin();
   const input = deleteWorkplaceSchema.parse(values);
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
 
-  const { error } = await supabase.from("workplaces").delete().eq("id", input.id);
-  if (error) {
-    throw new Error(error.message);
-  }
+  db.query("DELETE FROM workplaces WHERE id = ?").run(input.id);
 
   revalidatePath("/dashboard");
   return { success: true };
@@ -142,7 +144,8 @@ export const updateWorkerProfile = async (
 ) => {
   await requireAdmin();
   const input = updateWorkerProfileSchema.parse(values);
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
+  const timestamp = nowIso();
 
   const payload: Record<string, unknown> = {};
   if (input.fullName !== undefined) payload.full_name = input.fullName;
@@ -150,13 +153,12 @@ export const updateWorkerProfile = async (
   if (input.role !== undefined) payload.role = input.role;
 
   if (Object.keys(payload).length) {
-    const { error } = await supabase
-      .from("user_profiles")
-      .update(payload)
-      .eq("user_id", input.userId);
-    if (error) {
-      throw new Error(error.message);
-    }
+    const assignments: [string, unknown][] = Object.entries(payload);
+    const columns = assignments.map(([key]) => `${key} = ?`).join(", ");
+    const valuesToBind = assignments.map(([, value]) => value);
+    db.query(
+      `UPDATE user_profiles SET ${columns}, updated_at = ? WHERE user_id = ?`,
+    ).run(...valuesToBind, timestamp, input.userId);
   }
 
   revalidatePath("/dashboard");
@@ -173,15 +175,16 @@ export const assignWorkerToWorkplace = async (
 ) => {
   await requireAdmin();
   const input = assignmentSchema.parse(values);
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
 
-  const { error } = await supabase.from("worker_assignments").insert({
-    worker_id: input.workerId,
-    workplace_id: input.workplaceId,
-  });
-
-  if (error && error.code !== "23505") {
-    throw new Error(error.message);
+  try {
+    db.query(
+      "INSERT INTO worker_assignments (id, worker_id, workplace_id, assigned_at) VALUES (?, ?, ?, ?)",
+    ).run(randomUUID(), input.workerId, input.workplaceId, nowIso());
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && (error as { code: string }).code === "SQLITE_CONSTRAINT")) {
+      throw error;
+    }
   }
 
   revalidatePath("/dashboard");
@@ -198,17 +201,11 @@ export const removeWorkerAssignment = async (
 ) => {
   await requireAdmin();
   const input = removeAssignmentSchema.parse(values);
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
 
-  const { error } = await supabase
-    .from("worker_assignments")
-    .delete()
-    .eq("worker_id", input.workerId)
-    .eq("workplace_id", input.workplaceId);
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  db.query(
+    "DELETE FROM worker_assignments WHERE worker_id = ? AND workplace_id = ?",
+  ).run(input.workerId, input.workplaceId);
 
   revalidatePath("/dashboard");
   return { success: true };
@@ -221,52 +218,36 @@ const adminClockSchema = z.object({
 });
 
 export const adminClock = async (values: z.infer<typeof adminClockSchema>) => {
-  const { user } = await requireAdmin();
+  const { profile } = await requireAdmin();
   const input = adminClockSchema.parse(values);
-  const supabase = getSupabaseAdmin();
+  const db = getDb();
+  const timestamp = nowIso();
 
   if (input.action === "clock-in") {
-    const { error } = await supabase.from("time_entries").insert({
-      worker_id: input.workerId,
-      workplace_id: input.workplaceId,
-      clock_in_at: new Date().toISOString(),
-      method: "admin",
-      created_by: user.id,
-    });
-    if (error) {
-      throw new Error(error.message);
-    }
+    db.query(
+      "INSERT INTO time_entries (id, worker_id, workplace_id, clock_in_at, method, created_by, created_at) VALUES (?, ?, ?, ?, 'admin', ?, ?)",
+    ).run(
+      randomUUID(),
+      input.workerId,
+      input.workplaceId,
+      timestamp,
+      profile.user_id,
+      timestamp,
+    );
   } else {
-    const { data, error } = await supabase
-      .from("time_entries")
-      .select("id")
-      .eq("worker_id", input.workerId)
-      .eq("workplace_id", input.workplaceId)
-      .is("clock_out_at", null)
-      .order("clock_in_at", { ascending: false })
-      .limit(1)
-      .maybeSingle<{ id: string }>();
+    const activeEntry = db
+      .query<{ id: string }>(
+        "SELECT id FROM time_entries WHERE worker_id = ? AND workplace_id = ? AND clock_out_at IS NULL ORDER BY clock_in_at DESC LIMIT 1",
+      )
+      .get(input.workerId, input.workplaceId);
 
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (!data) {
+    if (!activeEntry) {
       throw new Error("No active shift found");
     }
 
-    const { error: updateError } = await supabase
-      .from("time_entries")
-      .update({
-        clock_out_at: new Date().toISOString(),
-        created_by: user.id,
-        method: "admin",
-      })
-      .eq("id", data.id);
-
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
+    db.query(
+      "UPDATE time_entries SET clock_out_at = ?, created_by = ?, method = 'admin' WHERE id = ?",
+    ).run(timestamp, profile.user_id, activeEntry.id);
   }
 
   revalidatePath("/dashboard");
@@ -335,9 +316,15 @@ export const deleteWorkplaceAction = async (formData: FormData) => {
 };
 
 export const assignWorkerAction = async (formData: FormData) => {
+  const workplaceId = getOptionalString(formData.get("workplaceId"));
+
+  if (!workplaceId) {
+    throw new Error("Select a workplace before assigning.");
+  }
+
   await assignWorkerToWorkplace({
     workerId: getString(formData.get("workerId")),
-    workplaceId: getString(formData.get("workplaceId")),
+    workplaceId,
   });
 };
 
@@ -349,9 +336,15 @@ export const removeAssignmentAction = async (formData: FormData) => {
 };
 
 export const adminClockAction = async (formData: FormData) => {
+  const workplaceId = getOptionalString(formData.get("workplaceId"));
+
+  if (!workplaceId) {
+    throw new Error("Select a workplace before clocking in or out.");
+  }
+
   await adminClock({
     workerId: getString(formData.get("workerId")),
-    workplaceId: getString(formData.get("workplaceId")),
+    workplaceId,
     action: getString(formData.get("action")) as "clock-in" | "clock-out",
   });
 };

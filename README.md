@@ -6,11 +6,11 @@ A modern timekeeping application for managing worker shifts with geolocation-bas
 
 - **Next.js 15** - React framework with App Router and Server Actions
 - **TypeScript** - Type-safe development
-- **Supabase** - Authentication and PostgreSQL database
+- **SQLite** - Lightweight relational database (via Bun's `bun:sqlite`)
 - **Tailwind CSS** - Styling with dark theme
 - **shadcn/ui** - UI component library
 - **Bun** - Runtime and package manager
-- **Bun SQL** - Native PostgreSQL client via Bun runtime
+- **Bun password APIs** - Built-in password hashing and verification
 - **Geolocation API** - Location-based clock-in validation
 
 ## How It Works
@@ -35,7 +35,6 @@ Workers can only clock in when physically within the defined radius of their ass
 
 ### Prerequisites
 - Bun 1.1+
-- A Supabase account and project
 
 ### Installation
 
@@ -44,20 +43,23 @@ Workers can only clock in when physically within the defined radius of their ass
    bun install
    ```
 
-2. **Set up environment variables**
-   
-   Create a `.env.local` file with your Supabase credentials:
-   ```
-   SUPABASE_URL=your_supabase_url
-   SUPABASE_ANON_KEY=your_anon_key
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-   ```
+2. **Set up environment variables (optional)**
+  
+  Create a `.env.local` file to override defaults:
+  ```
+  # Where the SQLite database file will be placed (defaults to ./sqlite/clock-in.sqlite)
+  DATABASE_PATH=./sqlite/clock-in.sqlite
+
+  # Optional admin bootstrap values used by create-admin script
+  ADMIN_EMAIL=admin@clockin.local
+  ADMIN_PASSWORD=admin123
+  ADMIN_FULL_NAME=Admin User
+  ```
 
 3. **Run the database schema**
-   
-   Execute the SQL in `supabase/schema.sql` in your Supabase SQL Editor to create all required tables.
+  ```bash
+  bun run run-schema
+  ```
 
 4. **Create an admin user**
    ```bash
@@ -75,8 +77,8 @@ Workers can only clock in when physically within the defined radius of their ass
 
 ## Admin Credentials
 
-**Email:** erlin.hx@gmail.com  
-**Password:** erlin123
+**Email:** admin@clockin.local  
+**Password:** admin123
 
 Use these credentials to log in and access the admin dashboard.
 
@@ -97,13 +99,13 @@ clock-in/
 │   │   ├── dashboard/          # Admin and worker dashboards
 │   │   └── ui/                 # shadcn/ui components
 │   ├── lib/                    # Utilities and helpers
-│   │   ├── auth-client.ts      # Client-side auth functions
-│   │   ├── session.ts          # Session management
-│   │   ├── data.ts             # Data fetching
+│   │   ├── db.ts               # SQLite connection helper
+│   │   ├── session.ts          # Session + auth helpers
+│   │   ├── data.ts             # Data fetching helpers
 │   │   └── geo.ts              # Geolocation utilities
 │   └── server/actions/         # Server Actions for data mutations
-├── supabase/
-│   └── schema.sql              # Database schema
+├── sqlite/
+│   └── schema.sql              # SQLite schema
 └── scripts/                    # Utility scripts
 ```
 
@@ -120,3 +122,7 @@ clock-in/
 ## License
 
 MIT
+
+
+Email: admin@clockin.local
+Password: admin123
