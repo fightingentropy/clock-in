@@ -1,4 +1,4 @@
-import { formatDistanceStrict } from "date-fns";
+import { format, formatDistanceStrict } from "date-fns";
 import { Building2, UserRound } from "lucide-react";
 
 import ClockControls from "@/components/clock-controls";
@@ -169,16 +169,20 @@ const WorkerDashboard = ({
                           roundingMethod: "floor",
                         })
                       : "-";
+                    const formattedClockIn = format(clockIn, "MMM d, yyyy • h:mm a");
+                    const formattedClockOut = clockOut
+                      ? format(clockOut, "MMM d, yyyy • h:mm a")
+                      : null;
                     return (
                       <TableRow key={entry.id} className="border-white/5">
                         <TableCell className="text-sm">
                           {entry.workplaces?.name ?? "-"}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {clockIn.toISOString()}
+                          {formattedClockIn}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {clockOut ? clockOut.toISOString() : "Active"}
+                          {formattedClockOut ?? "Active"}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {duration}

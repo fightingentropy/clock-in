@@ -1,42 +1,50 @@
-const { createClient } = require("@supabase/supabase-js");
-const fs = require("fs");
-const path = require("path");
+import { createClient } from "@supabase/supabase-js";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-// Load .env.local file
-function loadEnv() {
-  const envPath = path.join(__dirname, "..", ".env.local");
-  if (!fs.existsSync(envPath)) {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const loadEnv = () => {
+  const envPath = join(__dirname, "..", ".env.local");
+
+  if (!existsSync(envPath)) {
     console.error("❌ Error: .env.local file not found");
     process.exit(1);
   }
 
-  const envContent = fs.readFileSync(envPath, "utf8");
+  const envContent = readFileSync(envPath, "utf8");
   const lines = envContent.split("\n");
 
-  lines.forEach((line) => {
-    // Skip empty lines and comments
-    if (!line.trim() || line.trim().startsWith("#")) return;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
 
-    // Parse KEY=VALUE
-    const match = line.match(/^([^=]+)=(.*)$/);
-    if (match) {
-      const key = match[1].trim();
-      let value = match[2].trim();
-
-      // Remove surrounding quotes if present
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-
-      process.env[key] = value;
+    if (!line || line.startsWith("#")) {
+      continue;
     }
-  });
-}
 
-async function createAdmin() {
+    const match = line.match(/^([^=]+)=(.*)$/);
+
+    if (!match) {
+      continue;
+    }
+
+    const key = match[1].trim();
+    let value = match[2].trim();
+
+    if (
+      (value.startsWith("\"") && value.endsWith("\"")) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+};
+
+const createAdmin = async () => {
   loadEnv();
 
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -44,7 +52,7 @@ async function createAdmin() {
 
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error(
-      "❌ Error: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not found in environment variables"
+      "❌ Error: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not found in environment variables",
     );
     process.exit(1);
   }
@@ -62,7 +70,6 @@ async function createAdmin() {
   console.log("🔍 Checking if admin user exists...");
 
   try {
-    // Check if user exists
     const { data: existingUsers, error: listError } =
       await supabase.auth.admin.listUsers();
 
@@ -71,16 +78,15 @@ async function createAdmin() {
     }
 
     const existingUser = existingUsers.users.find(
-      (user) => user.email === adminEmail
+      (user) => user.email === adminEmail,
     );
 
-    let userId;
+    let userId: string;
 
     if (existingUser) {
       console.log("👤 User already exists, updating password...");
       userId = existingUser.id;
 
-      // Update password
       const { error: updateError } = await supabase.auth.admin.updateUserById(
         userId,
         {
@@ -88,7 +94,7 @@ async function createAdmin() {
           user_metadata: {
             role: "admin",
           },
-        }
+        },
       );
 
       if (updateError) {
@@ -99,7 +105,6 @@ async function createAdmin() {
     } else {
       console.log("➕ Creating new admin user...");
 
-      // Create new user
       const { data: newUser, error: createError } =
         await supabase.auth.admin.createUser({
           email: adminEmail,
@@ -111,15 +116,14 @@ async function createAdmin() {
           },
         });
 
-      if (createError) {
-        throw createError;
+      if (createError || !newUser?.user) {
+        throw createError ?? new Error("Failed to create admin user");
       }
 
       userId = newUser.user.id;
       console.log("✅ Admin user created successfully");
     }
 
-    // Check if profile exists in user_profiles table
     console.log("🔍 Checking user profile...");
     const { data: profile, error: profileError } = await supabase
       .from("user_profiles")
@@ -132,7 +136,6 @@ async function createAdmin() {
     }
 
     if (profile) {
-      // Update existing profile to ensure admin role
       console.log("📝 Updating profile to admin role...");
       const { error: updateProfileError } = await supabase
         .from("user_profiles")
@@ -145,9 +148,9 @@ async function createAdmin() {
       if (updateProfileError) {
         throw updateProfileError;
       }
+
       console.log("✅ Profile updated to admin role");
     } else {
-      // Create new profile
       console.log("➕ Creating admin profile...");
       const { error: insertProfileError } = await supabase
         .from("user_profiles")
@@ -161,6 +164,7 @@ async function createAdmin() {
       if (insertProfileError) {
         throw insertProfileError;
       }
+
       console.log("✅ Admin profile created");
     }
 
@@ -173,10 +177,13 @@ async function createAdmin() {
     console.log("");
     console.log("You can now log in to your Clock In Portal!");
   } catch (error) {
-    console.error("❌ Error setting up admin:", error.message);
+    const message =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    console.error("❌ Error setting up admin:", message);
     console.error(error);
     process.exit(1);
   }
-}
+};
 
 createAdmin();
+

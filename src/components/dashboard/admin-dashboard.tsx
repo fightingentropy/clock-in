@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { Users, Building2, Clock, MapPin } from "lucide-react";
 
 import type {
@@ -68,13 +70,22 @@ const AdminDashboard = ({
   openEntries,
   recentEntries,
 }: AdminDashboardProps) => {
-  const [activeTab, setActiveTab] = useState("overview");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const tabParam = searchParams.get("tab") ?? "overview";
+  const [activeTab, setActiveTab] = useState(tabParam);
   const [formState, dispatch] = useActionState<CreateWorkerActionState, FormData>(
     createWorkerAction,
     initialCreateWorkerState,
   );
   const [showNotification, setShowNotification] = useState(false);
   const createWorkerFormRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    setActiveTab(tabParam);
+  }, [tabParam]);
 
   useEffect(() => {
     if (formState.status === "success" || formState.status === "error") {
@@ -93,6 +104,18 @@ const AdminDashboard = ({
   openEntries?.forEach((entry) => {
     openMap.set(entry.worker_id, entry);
   });
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "overview") {
+      params.delete("tab");
+    } else {
+      params.set("tab", value);
+    }
+    const queryString = params.toString();
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-foreground">
@@ -354,7 +377,7 @@ const AdminDashboard = ({
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="mb-6 grid w-full grid-cols-4 bg-black/40 border border-white/5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="workers">Workers</TabsTrigger>
@@ -422,39 +445,51 @@ const AdminDashboard = ({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {recentEntries.map((entry) => (
-                        <TableRow key={entry.id} className="border-white/5">
-                          <TableCell>
-                            <div className="text-xs">
-                              <p className="font-medium text-white">
-                                {entry.worker?.full_name || entry.worker?.email}
-                              </p>
-                              <p className="text-muted-foreground">
-                                {entry.worker?.email}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {entry.workplaces?.name ?? "-"}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {new Date(entry.clock_in_at).toISOString()}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {entry.clock_out_at
-                              ? new Date(entry.clock_out_at).toISOString()
-                              : "Active"}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className="text-xs uppercase"
-                            >
-                              {entry.method}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {recentEntries.map((entry) => {
+                        const clockIn = new Date(entry.clock_in_at);
+                        const clockOut = entry.clock_out_at
+                          ? new Date(entry.clock_out_at)
+                          : null;
+                        const formattedClockIn = format(
+                          clockIn,
+                          "MMM d, yyyy • h:mm a",
+                        );
+                        const formattedClockOut = clockOut
+                          ? format(clockOut, "MMM d, yyyy • h:mm a")
+                          : null;
+
+                        return (
+                          <TableRow key={entry.id} className="border-white/5">
+                            <TableCell>
+                              <div className="text-xs">
+                                <p className="font-medium text-white">
+                                  {entry.worker?.full_name || entry.worker?.email}
+                                </p>
+                                <p className="text-muted-foreground">
+                                  {entry.worker?.email}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {entry.workplaces?.name ?? "-"}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {formattedClockIn}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {formattedClockOut ?? "Active"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className="text-xs uppercase"
+                              >
+                                {entry.method}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 ) : (
@@ -602,6 +637,11 @@ const AdminDashboard = ({
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex flex-col items-end gap-2">
+                                <Button asChild variant="outline" size="sm">
+                                  <Link href={`/dashboard/workers/${worker.user_id}`}>
+                                    View profile
+                                  </Link>
+                                </Button>
                                 <form
                                   action={adminClockAction}
                                   className="flex gap-2 text-xs"

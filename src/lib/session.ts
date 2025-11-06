@@ -10,23 +10,33 @@ type AuthState = {
 const getServerAuthState = async (): Promise<AuthState> => {
   const supabase = await getSupabaseServerComponentClient();
 
-  const [sessionResult, userResult] = await Promise.all([
-    supabase.auth.getSession(),
-    supabase.auth.getUser(),
-  ]);
+  const sessionResult = await supabase.auth.getSession();
 
   if (sessionResult.error) {
     console.error("Failed to retrieve Supabase session", sessionResult.error);
   }
 
-  if (userResult.error) {
-    console.error("Failed to retrieve Supabase user", userResult.error);
+  const session = sessionResult.data?.session ?? null;
+
+  if (!session) {
+    return { session: null, user: null };
   }
 
-  return {
-    session: sessionResult.data?.session ?? null,
-    user: userResult.data?.user ?? null,
-  };
+  try {
+    const userResult = await supabase.auth.getUser();
+
+    if (userResult.error) {
+      console.error("Failed to retrieve Supabase user", userResult.error);
+    }
+
+    return {
+      session,
+      user: userResult.data?.user ?? null,
+    };
+  } catch (error) {
+    console.error("Failed to retrieve Supabase user", error);
+    return { session, user: null };
+  }
 };
 
 export const getServerSession = async (): Promise<Session | null> => {
@@ -104,17 +114,17 @@ export const requireProfile = async () => {
       throw new Error(createError?.message || "Unable to create profile");
     }
     console.log("✅ requireProfile: Profile created successfully");
-    return { session, profile: created };
+    return { session, profile: created, user };
   }
 
   console.log("✅ requireProfile: Profile found successfully");
-  return { session, profile: data };
+  return { session, profile: data, user };
 };
 
 export const requireAdmin = async () => {
-  const { session, profile } = await requireProfile();
-  if (profile.role !== "admin") {
+  const result = await requireProfile();
+  if (result.profile.role !== "admin") {
     throw new Error("Forbidden");
   }
-  return { session, profile };
+  return result;
 };

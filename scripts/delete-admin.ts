@@ -1,42 +1,50 @@
-const { createClient } = require("@supabase/supabase-js");
-const fs = require("fs");
-const path = require("path");
+import { createClient } from "@supabase/supabase-js";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-// Load .env.local file
-function loadEnv() {
-  const envPath = path.join(__dirname, "..", ".env.local");
-  if (!fs.existsSync(envPath)) {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const loadEnv = () => {
+  const envPath = join(__dirname, "..", ".env.local");
+
+  if (!existsSync(envPath)) {
     console.error("❌ Error: .env.local file not found");
     process.exit(1);
   }
 
-  const envContent = fs.readFileSync(envPath, "utf8");
+  const envContent = readFileSync(envPath, "utf8");
   const lines = envContent.split("\n");
 
-  lines.forEach((line) => {
-    // Skip empty lines and comments
-    if (!line.trim() || line.trim().startsWith("#")) return;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
 
-    // Parse KEY=VALUE
-    const match = line.match(/^([^=]+)=(.*)$/);
-    if (match) {
-      const key = match[1].trim();
-      let value = match[2].trim();
-
-      // Remove surrounding quotes if present
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-
-      process.env[key] = value;
+    if (!line || line.startsWith("#")) {
+      continue;
     }
-  });
-}
 
-async function deleteAdmin() {
+    const match = line.match(/^([^=]+)=(.*)$/);
+
+    if (!match) {
+      continue;
+    }
+
+    const key = match[1].trim();
+    let value = match[2].trim();
+
+    if (
+      (value.startsWith("\"") && value.endsWith("\"")) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+};
+
+const deleteAdmin = async () => {
   loadEnv();
 
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -61,7 +69,6 @@ async function deleteAdmin() {
   console.log("🔍 Searching for admin user:", adminEmail);
 
   try {
-    // Find the user by email
     const { data: existingUsers, error: listError } =
       await supabase.auth.admin.listUsers();
 
@@ -82,7 +89,6 @@ async function deleteAdmin() {
     const userId = userToDelete.id;
     console.log("✓ Found user with ID:", userId);
 
-    // Delete from user_profiles table first (to avoid foreign key constraint issues)
     console.log("🗑️  Deleting user profile...");
     const { error: profileDeleteError } = await supabase
       .from("user_profiles")
@@ -98,7 +104,6 @@ async function deleteAdmin() {
       console.log("✅ User profile deleted");
     }
 
-    // Delete from auth.users
     console.log("🗑️  Deleting auth user...");
     const { error: authDeleteError } =
       await supabase.auth.admin.deleteUser(userId);
@@ -113,10 +118,13 @@ async function deleteAdmin() {
     console.log("  Email:", adminEmail);
     console.log("");
   } catch (error) {
-    console.error("❌ Error deleting admin:", error.message);
+    const message =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    console.error("❌ Error deleting admin:", message);
     console.error(error);
     process.exit(1);
   }
-}
+};
 
 deleteAdmin();
+

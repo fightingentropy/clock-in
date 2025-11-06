@@ -9,6 +9,8 @@ A modern timekeeping application for managing worker shifts with geolocation-bas
 - **Supabase** - Authentication and PostgreSQL database
 - **Tailwind CSS** - Styling with dark theme
 - **shadcn/ui** - UI component library
+- **Bun** - Runtime and package manager
+- **Bun SQL** - Native PostgreSQL client via Bun runtime
 - **Geolocation API** - Location-based clock-in validation
 
 ## How It Works
@@ -32,14 +34,14 @@ Workers can only clock in when physically within the defined radius of their ass
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+
+- Bun 1.1+
 - A Supabase account and project
 
 ### Installation
 
 1. **Clone and install dependencies**
    ```bash
-   npm install
+   bun install
    ```
 
 2. **Set up environment variables**
@@ -59,12 +61,12 @@ Workers can only clock in when physically within the defined radius of their ass
 
 4. **Create an admin user**
    ```bash
-   node scripts/create-admin.js
+   bun run create-admin
    ```
 
 5. **Start the development server**
    ```bash
-   npm run dev
+   bun run dev
    ```
 
 6. **Access the app**
@@ -107,12 +109,13 @@ clock-in/
 
 ## Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run lint` - Run ESLint
-- `node scripts/create-admin.js` - Create/update admin user
-- `node scripts/run-schema.js` - Apply database schema
+- `bun run dev` - Start development server
+- `bun run build` - Build for production
+- `bun run start` - Start production server
+- `bun run lint` - Run ESLint
+- `bun run create-admin` - Create/update admin user
+- `bun run delete-admin` - Remove the seeded admin user
+- `bun run run-schema` - Apply database schema
 
 ## License
 

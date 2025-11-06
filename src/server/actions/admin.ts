@@ -221,7 +221,7 @@ const adminClockSchema = z.object({
 });
 
 export const adminClock = async (values: z.infer<typeof adminClockSchema>) => {
-  const { session } = await requireAdmin();
+  const { user } = await requireAdmin();
   const input = adminClockSchema.parse(values);
   const supabase = getSupabaseAdmin();
 
@@ -231,7 +231,7 @@ export const adminClock = async (values: z.infer<typeof adminClockSchema>) => {
       workplace_id: input.workplaceId,
       clock_in_at: new Date().toISOString(),
       method: "admin",
-      created_by: session.user.id,
+      created_by: user.id,
     });
     if (error) {
       throw new Error(error.message);
@@ -259,7 +259,7 @@ export const adminClock = async (values: z.infer<typeof adminClockSchema>) => {
       .from("time_entries")
       .update({
         clock_out_at: new Date().toISOString(),
-        created_by: session.user.id,
+        created_by: user.id,
         method: "admin",
       })
       .eq("id", data.id);
